@@ -65,7 +65,7 @@ ASX_TICKERS = [
     "THL.AX","AMI.AX","PE1.AX","ASL.AX","BTR.AX","IGL.AX","APX.AX","QOR.AX",
     "INR.AX","CGS.AX","ACL.AX","ASM.AX","TTT.AX","DXC.AX","EUR.AX","BTL.AX",
     "BLX.AX","USL.AX","A1M.AX","TOK.AX","AZY.AX","RMC.AX","STX.AX","LGI.AX",
-    "CEL.AX","VYS.AX","KGN.AX","TGN.AX","KSL.AX","SVL.AX","BRN.AX","BCN.AX",
+    "CEL.AX","VYS.AX","KGN.AX","TGN.AX","KSL.AX","SVT.AX","BRN.AX","BCN.AX",
     "PGC.AX","HCW.AX","LOT.AX","HUM.AX","VGL.AX","CTM.AX","GDI.AX","PPS.AX",
     "AAR.AX","FID.AX","TRE.AX","SST.AX","TBR.AX","RHI.AX","NVA.AX","SVR.AX",
     "PIA.AX","PBH.AX","PAC.AX","AMH.AX","MM8.AX","COG.AX","EBR.AX","MPW.AX",
@@ -77,7 +77,7 @@ ASX_TICKERS = [
     "NTU.AX","MYG.AX","BIS.AX","LAU.AX","TTM.AX","EML.AX","ORN.AX","KPG.AX",
     "GDF.AX","GRR.AX","FRI.AX","TTX.AX","STN.AX","LAM.AX","AD8.AX","CYM.AX",
     "POL.AX","WTM.AX","WRK.AX","CCV.AX","BHM.AX","WJL.AX","ETM.AX","OCC.AX",
-    "LDX.AX","BBN.AX","EUROC.AX","CEH.AX","ATA.AX","BGD.AX","HAV.AX","WAR.AX",
+    "LDX.AX","BBN.AX","CEH.AX","ATA.AX","BGD.AX","HAV.AX","WAR.AX",
     "ARX.AX","SPL.AX","AUE.AX","DXB.AX","WMA.AX","CUP.AX","EZL.AX","OMH.AX",
     "VTM.AX","SYR.AX","MYX.AX","BET.AX","EGR.AX","ARR.AX","TER.AX","GEM.AX",
     "SPD.AX","CAA.AX","EXR.AX","LKE.AX","SSG.AX","TGF.AX","JYC.AX","RNU.AX",
@@ -119,6 +119,212 @@ def _parse_date(raw):
         except Exception:
             return None
     return None
+
+
+def _quarterly_revenue_trend(ticker_obj):
+    """
+    Pull quarterly revenue from yfinance financials.
+    Returns (rev_growth_pct, rev_trend, rev_quarters) where:
+      - rev_growth_pct: YoY % change in most recent quarter's revenue
+      - rev_trend: 'accelerating' | 'growing' | 'flat' | 'declining' | None
+      - rev_quarters: list of (label, value_M) for up to 4 quarters, newest first
+    """
+    try:
+        qf = ticker_obj.quarterly_financials
+        if qf is None or qf.empty:
+            return None, None, []
+
+        # Revenue row â try multiple possible row names
+        rev_row = None
+        for label in ['Total Revenue', 'Revenue', 'Net Revenue', 'Revenues']:
+            if label in qf.index:
+                rev_row = qf.loc[label]
+                break
+        if rev_row is None:
+            return None, None, []
+
+        rev_row = rev_row.dropna()
+        if len(rev_row) < 2:
+            return None, None, []
+
+        # Columns are dates (newest first)
+        rev_vals = list(rev_row.values)   # newest â oldest
+        rev_cols = list(rev_row.index)
+
+        quarters = []
+        for i, (col, val) in enumerate(zip(rev_cols, rev_vals)):
+            if i >= 4:
+                break
+            try:
+                lbl = col.strftime('%b %y') if hasattr(col, 'strftime') else str(col)[:7]
+                quarters.append((lbl, round(float(val) / 1e6, 1)))  # in $M
+            except Exception:
+                pass
+
+        # YoY growth: compare Q0 vs Q4 (same quarter last year)
+        rev_growth_pct = None
+        if len(rev_vals) >= 4:
+            q0, q4 = float(rev_vals[0]), float(rev_vals[3])
+            if q4 != 0:
+                rev_growth_pct = round((q0 - q4) / abs(q4) * 100, 1)
+
+        # Sequential trend: Q0 vs Q1 vs Q2 (is revenue accelerating?)
+        rev_trend = None
+        if len(rev_vals) >= 3:
+            q0, q1, q2 = float(rev_vals[0]), float(rev_vals[1]), float(rev_vals[2])
+            if q1 != 0 and q2 != 0:
+                chg_recent = (q0 - q1) / abs(q1) * 100   # Q0 vs Q1
+                chg_prev   = (q1 - q2) / abs(q2) * 100   # Q1 vs Q2
+                if q0 > q1 > q2:
+                    rev_trend = 'accelerating' if chg_recent > chg_prev else 'growing'
+                elif q0 > q1:
+                    rev_trend = 'growing'
+                elif q0 < q1:
+                    rev_trend = 'declining'
+                else:
+                    rev_trend = 'flat'
+        elif len(rev_vals) >= 2:
+            q0, q1 = float(rev_vals[0]), float(rev_vals[1])
+            if q1 != 0:
+                rev_trend = 'growing' if q0 > q1 else 'declining' if q0 < q1 else 'flat'
+
+        return rev_growth_pct, rev_trend, quarters
+
+    except Exception:
+        return None, None, []
+
+
+def _quarterly_eps_trend(ticker_obj):
+    """
+    Pull quarterly EPS from yfinance earnings.
+    Returns (eps_growth_pct, eps_trend, eps_quarters).
+    """
+    try:
+        qe = ticker_obj.quarterly_earnings
+        if qe is None or qe.empty:
+            # Fallback: try quarterly_financials net income
+            qf = ticker_obj.quarterly_financials
+            if qf is not None and not qf.empty:
+                for label in ['Net Income', 'Net Income Common Stockholders', 'Net Income Applicable To Common Shares']:
+                    if label in qf.index:
+                        ni = qf.loc[label].dropna()
+                        if len(ni) >= 2:
+                            vals = list(ni.values)
+                            g = round((float(vals[0]) - float(vals[1])) / abs(float(vals[1])) * 100, 1) if vals[1] != 0 else None
+                            tr = 'growing' if vals[0] > vals[1] else 'declining' if vals[0] < vals[1] else 'flat'
+                            return g, tr, []
+            return None, None, []
+
+        eps_col = 'Reported EPS' if 'Reported EPS' in qe.columns else (qe.columns[0] if len(qe.columns) else None)
+        if eps_col is None:
+            return None, None, []
+
+        eps_vals = qe[eps_col].dropna()
+        if len(eps_vals) < 2:
+            return None, None, []
+
+        vals = list(eps_vals.values)  # newest first
+        quarters = [(str(idx)[:7], round(float(v), 3)) for idx, v in zip(eps_vals.index[:4], vals[:4])]
+
+        eps_growth_pct = None
+        if len(vals) >= 4 and vals[3] != 0:
+            eps_growth_pct = round((float(vals[0]) - float(vals[3])) / abs(float(vals[3])) * 100, 1)
+        elif len(vals) >= 2 and vals[1] != 0:
+            eps_growth_pct = round((float(vals[0]) - float(vals[1])) / abs(float(vals[1])) * 100, 1)
+
+        eps_trend = None
+        if len(vals) >= 2:
+            eps_trend = 'growing' if float(vals[0]) > float(vals[1]) else 'declining' if float(vals[0]) < float(vals[1]) else 'flat'
+
+        return eps_growth_pct, eps_trend, quarters
+
+    except Exception:
+        return None, None, []
+
+
+def _fetch_events(ticker_obj):
+    """
+    Fetch upcoming earnings, AGM, and ex-dividend events.
+    Returns (next_earnings_str, next_event_label, next_ex_div_str, days_to_event).
+    """
+    next_earnings    = None
+    next_event_label = None
+    next_ex_div      = None
+    days_to_event    = None
+    today            = date.today()
+
+    try:
+        cal = ticker_obj.calendar
+        # Handle both dict and DataFrame formats
+        if isinstance(cal, dict):
+            ed_list = cal.get('Earnings Date', [])
+            if not ed_list and 'earningsDate' in cal:
+                ed_list = cal.get('earningsDate', [])
+            if isinstance(ed_list, (list, tuple)) and ed_list:
+                ed = _parse_date(ed_list[0])
+            elif ed_list and not isinstance(ed_list, (list, tuple)):
+                ed = _parse_date(ed_list)
+            else:
+                ed = None
+
+            if ed:
+                days = (ed - today).days
+                if -30 <= days <= 180:
+                    next_earnings = str(ed)
+                    days_to_event = days
+                    if   days == 0:         next_event_label = "â¡ RESULTS TODAY"
+                    elif 0 < days <= 7:     next_event_label = f"â¡ Results in {days}d"
+                    elif 0 < days <= 30:    next_event_label = f"ð Results in {days}d"
+                    elif 0 < days <= 180:   next_event_label = f"ð Results {ed.strftime('%d %b')}"
+                    else:                   next_event_label = f"Results {abs(days)}d ago"
+
+            xd = cal.get('Ex-Dividend Date') or cal.get('exDividendDate')
+            if xd:
+                d2 = _parse_date(xd)
+                if d2 and (d2 - today).days >= -7:
+                    next_ex_div = d2.strftime('%d %b %Y')
+
+        elif hasattr(cal, 'columns'):
+            for col in ['Earnings Date', 'earningsDate']:
+                if col in cal.columns and not cal[col].empty:
+                    ed = _parse_date(cal[col].iloc[0])
+                    if ed:
+                        days = (ed - today).days
+                        if -30 <= days <= 180:
+                            next_earnings = str(ed)
+                            days_to_event = days
+                            if   days == 0:         next_event_label = "â¡ RESULTS TODAY"
+                            elif 0 < days <= 7:     next_event_label = f"â¡ Results in {days}d"
+                            elif 0 < days <= 30:    next_event_label = f"ð Results in {days}d"
+                            elif 0 < days <= 180:   next_event_label = f"ð Results {ed.strftime('%d %b')}"
+                            else:                   next_event_label = f"Results {abs(days)}d ago"
+                    break
+
+    except Exception:
+        pass
+
+    # Fallback: try get_earnings_dates for upcoming results
+    if not next_earnings:
+        try:
+            ed_df = ticker_obj.get_earnings_dates(limit=4)
+            if ed_df is not None and not ed_df.empty:
+                for idx in ed_df.index:
+                    d = _parse_date(idx)
+                    if d and d >= today:
+                        days = (d - today).days
+                        if days <= 180:
+                            next_earnings    = str(d)
+                            days_to_event    = days
+                            next_event_label = (
+                                f"â¡ Results in {days}d" if days <= 7 else
+                                f"ð Results in {days}d" if days <= 30 else
+                                f"ð Results {d.strftime('%d %b')}"
+                            )
+                        break
+        except Exception:
+            pass
+
+    return next_earnings, next_event_label, next_ex_div, days_to_event
 
 
 def fetch_stock(ticker):
@@ -182,85 +388,75 @@ def fetch_stock(ticker):
         elif sepa >= 4 and vcp >= VCP_MIN and pct_hi <= 15: status = "near-pivot"
         else: status = "watch"
 
-        # ── Fundamentals ────────────────────────────────────────────────────────
+        # ââ Fundamentals â use quarterly financials for reliable ASX data ââââââââ
         sector = name = ""
         rev_growth_pct = eps_growth_pct = net_margin_pct = None
         trailing_eps = forward_eps = None
         fund_score = 0
+        rev_trend = None
+        eps_trend = None
+        rev_quarters = []   # [(label, $M), ...] newest first
+        eps_quarters = []
 
         try:
-            inf2   = t.info
+            inf2 = t.info
             sector = inf2.get('sector', '') or inf2.get('industry', '') or ''
             name   = inf2.get('longName', ticker.replace('.AX', ''))
-            rg = inf2.get('revenueGrowth')
-            eg = inf2.get('earningsGrowth')
+
+            # Net margin and EPS from info (snapshot â usually available)
             pm = inf2.get('profitMargins')
             te = inf2.get('trailingEps')
             fe = inf2.get('forwardEps')
-            if rg is not None: rev_growth_pct = round(rg * 100, 1)
-            if eg is not None: eps_growth_pct = round(eg * 100, 1)
             if pm is not None: net_margin_pct = round(pm * 100, 1)
             if te is not None: trailing_eps   = round(float(te), 3)
             if fe is not None: forward_eps    = round(float(fe), 3)
+
+            # Revenue â prefer quarterly financials over snapshot info
+            rev_growth_pct, rev_trend, rev_quarters = _quarterly_revenue_trend(t)
+
+            # Fallback to t.info revenueGrowth if quarterly unavailable
+            if rev_growth_pct is None:
+                rg = inf2.get('revenueGrowth')
+                if rg is not None:
+                    rev_growth_pct = round(rg * 100, 1)
+
+            # EPS trend from quarterly earnings
+            eps_growth_pct, eps_trend, eps_quarters = _quarterly_eps_trend(t)
+
+            # Fallback to t.info earningsGrowth
+            if eps_growth_pct is None:
+                eg = inf2.get('earningsGrowth')
+                if eg is not None:
+                    eps_growth_pct = round(eg * 100, 1)
+
+            # Fund score (0-3)
             if rev_growth_pct is not None and rev_growth_pct > 5:  fund_score += 1
             if rev_growth_pct is not None and rev_growth_pct > 20: fund_score += 1
             if eps_growth_pct is not None and eps_growth_pct > 0:  fund_score += 1
             fund_score = min(fund_score, 3)
+
         except Exception:
             try:
                 name = t.info.get('longName', ticker.replace('.AX', ''))
             except Exception:
                 name = ticker.replace('.AX', '')
 
-        # ── Upcoming events ──────────────────────────────────────────────────────
-        next_earnings    = None
-        next_event_label = None
-        next_ex_div      = None
+        # ââ Upcoming events ââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+        next_earnings, next_event_label, next_ex_div, days_to_event = _fetch_events(t)
 
-        try:
-            cal = t.calendar
-            if isinstance(cal, dict):
-                ed_list = cal.get('Earnings Date', [])
-                if ed_list:
-                    ed = _parse_date(ed_list[0])
-                    if ed:
-                        days = (ed - date.today()).days
-                        if -10 <= days <= 120:
-                            next_earnings = str(ed)
-                            if days == 0:              next_event_label = "⚡ EARNINGS TODAY"
-                            elif 0 < days <= 7:        next_event_label = f"⚡ Earnings in {days}d"
-                            elif 0 < days <= 30:       next_event_label = f"📅 Earnings in {days}d"
-                            elif days > 30:            next_event_label = f"📅 Earnings {ed.strftime('%d %b')}"
-                            else:                      next_event_label = f"Results {abs(days)}d ago"
-                xd = cal.get('Ex-Dividend Date')
-                if xd:
-                    d2 = _parse_date(xd)
-                    if d2: next_ex_div = d2.strftime('%d %b %Y')
-            elif hasattr(cal, 'columns') and 'Earnings Date' in cal.columns:
-                ed = _parse_date(cal['Earnings Date'].iloc[0])
-                if ed:
-                    days = (ed - date.today()).days
-                    if -10 <= days <= 120:
-                        next_earnings = str(ed)
-                        if days == 0:              next_event_label = "⚡ EARNINGS TODAY"
-                        elif 0 < days <= 7:        next_event_label = f"⚡ Earnings in {days}d"
-                        elif 0 < days <= 30:       next_event_label = f"📅 Earnings in {days}d"
-                        elif days > 30:            next_event_label = f"📅 Earnings {ed.strftime('%d %b')}"
-                        else:                      next_event_label = f"Results {abs(days)}d ago"
-        except Exception:
-            pass
-
-        # ── Short signal ─────────────────────────────────────────────────────────
+        # ââ Short signal âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
         sigs = []
         if c_vol:        sigs.append(f"Vol {volr}x avg")
         if chg250d > 50: sigs.append(f"+{chg250d}% 12M")
         if vcp >= 3:     sigs.append("VCP tightening")
         if pct_hi < 5:   sigs.append("Near 52W high")
-        if next_event_label and ('⚡' in next_event_label or '📅' in next_event_label):
+        if rev_trend == 'accelerating': sigs.append("ââ Revenue accelerating")
+        elif rev_trend == 'growing':    sigs.append("â Revenue growing")
+        if next_event_label and ('â¡' in next_event_label or 'ð' in next_event_label):
             sigs.append(next_event_label)
         if not sigs:     sigs.append(f"SEPA {sepa}/7")
 
-        # ── Analysis text ────────────────────────────────────────────────────────
+        # ââ Analysis text ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
         tr   = "strongly uptrending" if chg250d > 40 else "uptrending" if chg250d > 15 else "recovering"
         mas  = "fully aligned (Price>MA50>MA150>MA200)" if (c_ma50 and c_ma150 and c_ma200) else "partially aligned"
         vls  = f"Volume is {volr}x the 50-day average" if volr >= 1.5 else f"Volume at {volr}x average"
@@ -268,14 +464,15 @@ def fetch_stock(ticker):
 
         fund_ctx = ""
         if rev_growth_pct is not None:
+            trend_desc = " (accelerating)" if rev_trend == 'accelerating' else " (growing QoQ)" if rev_trend == 'growing' else ""
             if rev_growth_pct > 20:
-                fund_ctx += f" Revenue growing strongly at +{rev_growth_pct}% YoY — fundamental momentum aligns with breakout."
+                fund_ctx += f" Net revenue growing strongly +{rev_growth_pct}% YoY{trend_desc} â fundamental momentum supports breakout."
             elif rev_growth_pct > 5:
-                fund_ctx += f" Revenue growing +{rev_growth_pct}% YoY."
+                fund_ctx += f" Net revenue +{rev_growth_pct}% YoY{trend_desc}."
             elif rev_growth_pct < 0:
-                fund_ctx += f" Revenue declined {rev_growth_pct}% YoY — monitor fundamentals."
+                fund_ctx += f" Net revenue declined {rev_growth_pct}% YoY â if monitor fundamentals before entry."
         if eps_growth_pct is not None and eps_growth_pct > 0:
-            fund_ctx += f" EPS growth +{eps_growth_pct}% confirms profitability expansion."
+            fund_ctx += f" EPS growth +{eps_growth_pct}% confirms expanding profitability."
         elif trailing_eps and trailing_eps > 0:
             fund_ctx += f" Profitable (trailing EPS ${trailing_eps})."
 
@@ -299,12 +496,23 @@ def fetch_stock(ticker):
             "mktcap": int(mktcap), "mktcapFmt": fmt_cap(mktcap), "status": status,
             "checks": {"ma50":c_ma50,"ma150":c_ma150,"ma200":c_ma200,
                        "trend":c_trend,"high":c_high,"low":c_low,"vol":c_vol},
-            "shortSignal": " · ".join(sigs[:3]), "analysis": analysis,
-            "revGrowth": rev_growth_pct, "epsGrowth": eps_growth_pct,
-            "netMargin": net_margin_pct, "trailingEps": trailing_eps,
-            "forwardEps": forward_eps,   "fundScore": fund_score,
-            "nextEarnings": next_earnings, "nextEventLabel": next_event_label,
-            "nextExDiv": next_ex_div,
+            "shortSignal": " Â· ".join(sigs[:3]), "analysis": analysis,
+            # Fundamentals
+            "revGrowth":   rev_growth_pct,
+            "revTrend":    rev_trend,
+            "revQuarters": rev_quarters,
+            "epsGrowth":   eps_growth_pct,
+            "epsTrend":    eps_trend,
+            "epsQuarters": eps_quarters,
+            "netMargin":   net_margin_pct,
+            "trailingEps": trailing_eps,
+            "forwardEps":  forward_eps,
+            "fundScore":   fund_score,
+            # Events
+            "nextEarnings":    next_earnings,
+            "nextEventLabel":  next_event_label,
+            "nextExDiv":       next_ex_div,
+            "daysToEvent":     days_to_event,
         }
 
     except Exception as e:
@@ -331,7 +539,7 @@ def fetch_all():
 
 def publish(html_path):
     if not NETLIFY_TOKEN or not NETLIFY_SITE_ID:
-        print("Netlify not configured — skipping publish")
+        print("Netlify not configured â skipping publish")
         return
     print("Publishing to Netlify...")
     with open(html_path, 'rb') as f:
@@ -357,7 +565,7 @@ def publish(html_path):
 
 
 if __name__ == "__main__":
-    print(f"SEPA+VCP ASX Screener — {date.today()}")
+    print(f"SEPA+VCP ASX Screener â {date.today()}")
     data = fetch_all()
     b = sum(1 for r in data if r['status'] == 'breakout')
     p = sum(1 for r in data if r['status'] == 'near-pivot')
