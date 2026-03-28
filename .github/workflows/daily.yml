@@ -1,0 +1,28 @@
+name: Daily ASX SEPA+VCP Screener Update
+on:
+  schedule:
+    - cron: '0 0 * * 1-5'
+  workflow_dispatch:
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install yfinance pandas requests
+      - name: Run screener
+        env:
+          NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: python screener.py
+      - name: Commit index.html
+        run: |
+          git config user.name "ASX Screener Bot"
+          git config user.email "bot@asx-screener.com"
+          git add index.html data/ || true
+          git diff --staged --quiet || git commit -m "Auto-update: $(date '+%d %b %Y')"
+          git push || true
