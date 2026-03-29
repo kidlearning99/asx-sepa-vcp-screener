@@ -442,9 +442,8 @@ if __name__ == "__main__":
     p = sum(1 for r in data if r['status'] == 'near-pivot')
     w = sum(1 for r in data if r['status'] == 'watch')
     print(f"Results: {len(data)} | Breakouts:{b} | Near Pivot:{p} | Watch:{w}")
-    if not data: 
-        print("No stocks passed filters, exiting instead of building an empty report.")
-        exit()
+    if not data:
+        print("No stocks passed filters — building empty dashboard.")
     try:
         import build_dashboard
         html = build_dashboard.build(data)
