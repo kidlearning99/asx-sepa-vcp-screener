@@ -1,9 +1,9 @@
 """
-build_dashboard.py — builds the HTML dashboard from screener data
+build_dashboard.py â builds the HTML dashboard from screener data
 Called by screener.py
 """
 from datetime import date
-import json, os
+import json
 
 
 def fmt_pct(v):
@@ -27,7 +27,7 @@ def build(data, source="Yahoo Finance (live)"):
         reverse=True
     )[:10]
 
-    medals   = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    medals   = ["ð¥","ð¥","ð¥","4ï¸â£","5ï¸â£","6ï¸â£","7ï¸â£","8ï¸â£","9ï¸â£","ð"]
     top_html = ""
     for i, r in enumerate(top):
         sc    = r["sepaScore"]
@@ -38,16 +38,23 @@ def build(data, source="Yahoo Finance (live)"):
         badge_bg    = "46,160,67" if r["status"] == "breakout" else "56,139,253"
         badge_label = "BREAKOUT"  if r["status"] == "breakout" else "NEAR PIVOT"
 
-        # event badge for top-picks card
+        # event + revenue badge for top-picks card
         ev_html = ""
         nl = r.get("nextEventLabel")
         if nl:
-            ev_col = "#f0e040" if "⚡" in nl else "#388bfd"
-            ev_bg  = "rgba(240,224,64,.1)" if "⚡" in nl else "rgba(56,139,253,.1)"
-            ev_bd  = "rgba(240,224,64,.3)" if "⚡" in nl else "rgba(56,139,253,.3)"
-            ev_html = (f'<div style="margin-top:5px;font-size:10px;font-weight:700;'
+            ev_col = "#f0e040" if "â¡" in nl else "#388bfd"
+            ev_bg  = "rgba(240,224,64,.1)" if "â¡" in nl else "rgba(56,139,253,.1)"
+            ev_bd  = "rgba(240,224,64,.3)" if "â¡" in nl else "rgba(56,139,253,.3)"
+            ev_html += (f'<div style="margin-top:5px;font-size:10px;font-weight:700;'
                        f'color:{ev_col};background:{ev_bg};border:1px solid {ev_bd};'
                        f'border-radius:4px;padding:2px 6px;display:inline-block">{nl}</div>')
+        rt = r.get("revTrend")
+        if rt in ("accelerating", "growing"):
+            rt_col = "#2ea043" if rt == "accelerating" else "#8bc34a"
+            rt_lbl = "ââ Rev Accelerating" if rt == "accelerating" else "â Rev Growing"
+            ev_html += (f'<div style="margin-top:4px;font-size:10px;font-weight:700;'
+                       f'color:{rt_col};background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);'
+                       f'border-radius:4px;padding:2px 6px;display:inline-block">{rt_lbl}</div>')
 
         top_html += f'''<div class="tc" onclick="jmp('{r["ticker"]}')" >
 <span style="font-size:20px;flex-shrink:0">{medals[i]}</span>
@@ -72,7 +79,7 @@ def build(data, source="Yahoo Finance (live)"):
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SEPA+VCP ASX Screener — {today_str}</title>
+<title>SEPA+VCP ASX Screener â {today_str}</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -105,30 +112,40 @@ input.srch,select{{background:var(--bg3);border:1px solid var(--border);color:va
 input.srch{{width:150px}}input.srch::placeholder{{color:var(--muted)}}input.srch:focus,select:focus{{border-color:var(--blue)}}
 .cnt{{font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap}}
 .twrap{{margin:0 28px 28px;border:1px solid var(--border);border-radius:10px;overflow:hidden;overflow-x:auto}}
-table{{width:100%;border-collapse:collapse;min-width:960px}}
+table{{width:100%;border-collapse:collapse;min-width:980px}}
 thead th{{background:var(--bg2);padding:9px 11px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);white-space:nowrap}}
 tbody tr{{border-bottom:1px solid var(--b2);cursor:pointer;transition:background .08s}}tbody tr:hover{{background:var(--bg2)}}tbody tr:last-child{{border-bottom:none}}
 tbody td{{padding:9px 11px;vertical-align:middle}}
 .tkr{{font-weight:800;font-size:14px;font-family:'JetBrains Mono';color:#fff}}.co{{font-size:10px;color:var(--muted);margin-top:1px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .badge{{display:inline-flex;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}}
 .bb{{background:rgba(46,160,67,.15);color:var(--green);border:1px solid rgba(46,160,67,.35)}}.bp{{background:rgba(56,139,253,.15);color:var(--blue);border:1px solid rgba(56,139,253,.35)}}.bw{{background:rgba(210,153,34,.15);color:var(--amber);border:1px solid rgba(210,153,34,.35)}}
-.pv{{font-family:'JetBrains Mono';font-size:13px;font-weight:600}}.gn{{color:var(--green)}}.rd{{color:var(--red)}}.gy{{color:var(--muted)}}
+.pv{{font-family:'JetBrains Mono';font-size:13px;font-weight:600}}.gn}{color:var(--green)}}.rd{{color:var(--red)}}.gy{{color:var(--muted)}}
 .vhigh{{color:var(--green);font-weight:700}}.vmed{{color:var(--amber);font-weight:600}}.vlow{{color:var(--muted)}}
 .pvg{{color:var(--green);font-weight:600}}.pvo{{color:var(--amber)}}.pvw{{color:var(--muted)}}
 .sec{{font-size:10px;color:#8b949e;max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.sig{{font-size:11px;color:#c9d1d9;line-height:1.4;max-width:200px}}.mc{{font-family:'JetBrains Mono';font-size:11px;color:#8b949e}}
 /* detail panel */
-.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 170px 200px 1fr;gap:18px;border-top:1px solid var(--b2)}}
+.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 170px 1fr 1fr;gap:18px;border-top:1px solid var(--b2)}}
 .dh{{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px}}
 .cl{{display:flex;flex-direction:column;gap:3px}}.cr{{display:flex;align-items:flex-start;gap:5px;font-size:11px;line-height:1.5}}.cr.ok{{color:var(--green)}}.cr.no{{color:#484f58}}.ci{{width:12px;flex-shrink:0;font-size:10px;margin-top:1px}}
 .mat{{width:100%;border-collapse:collapse;font-size:11px}}.mat td{{padding:2px 0}}.mlb{{color:var(--muted);width:56px}}.mbar{{padding:2px 6px;width:110px}}.mbw{{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}}.mbi{{height:100%;border-radius:3px}}.mvl{{font-family:'JetBrains Mono';color:#8b949e;text-align:right;width:62px}}
 .abox{{background:var(--bg2);border-radius:8px;padding:13px;border-left:3px solid var(--border);font-size:12px;color:#8b949e;line-height:1.8}}.aact{{margin-top:9px;font-weight:700;font-size:12px;padding:7px 11px;border-radius:6px}}
 .abuy{{color:var(--green);background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2)}}.awch{{color:var(--blue);background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2)}}.ahld{{color:var(--amber);background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2)}}
 .pg2{{display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:10px;margin-top:9px}}.pi{{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--b2)}}.pi:last-child{{border:none}}.pk{{color:var(--muted)}}
+/* revenue sparkbar */
+.rev-bars{{display:flex;align-items:flex-end;gap:3px;height:36px;margin:6px 0}}
+.rev-bar-wrap{{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1}}
+.rev-bar{{width:100%;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}}
+.rev-bar-lbl{{font-size:8px;color:var(--muted)}}
 /* event badges */
 .ev-hot{{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:800;background:rgba(240,224,64,.1);color:var(--gold);border:1px solid rgba(240,224,64,.35);margin-top:6px}}
 .ev-soon{{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:700;background:rgba(56,139,253,.1);color:var(--blue);border:1px solid rgba(56,139,253,.3);margin-top:6px}}
 .ev-div{{font-size:10px;color:var(--amber);margin-top:5px}}
 .ev-none{{font-size:10px;color:#484f58;margin-top:6px}}
+.trend-chip{{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-bottom:6px}}
+.trend-acc{{background:rgba(46,160,67,.12);color:var(--green);border:1px solid rgba(46,160,67,.3)}}
+.trend-grow{{background:rgba(139,195,74,.1);color:#8bc34a;border:1px solid rgba(139,195,74,.25)}}
+.trend-flat{{background:rgba(210,153,34,.1);color:var(--amber);border:1px solid rgba(210,153,34,.25)}}
+.trend-dec{{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)}}
 /* fund score row in table */
 .fpips{{display:flex;gap:2px}}
 .empty{{text-align:center;padding:50px;color:var(--muted)}}
@@ -139,13 +156,13 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
 <body>
 <nav>
   <div class="nlogo"><div class="ndot"></div>SEPA+VCP ASX Screener</div>
-  <div class="nlinks"><a href="#strategy">Strategy Guide</a><a href="#picks">Top Picks</a><a href="#screener">Full Screener</a></div>
-  <span class="nbadge">● Live — {today_str}</span>
+  <div class="nlinks"><a href="#picks">Top Picks</a><a href="#screener">Full Screener</a></div>
+  <span class="nbadge">â Live â {today_str}</span>
 </nav>
 
 <div class="hero">
-  <h1>ASX Stock Screener<br><span>SEPA + VCP + PVR</span></h1>
-  <p>Minervini's Stage 2 Trend Template combined with Volatility Contraction Pattern analysis, Price Volume Ratio scoring and breakout volume confirmation — applied to every ASX stock with market cap over $100M.</p>
+  <h1>ASX Stock Screener<br><span>SEPA + VCP + Fundamentals</span></h1>
+  <p>Minervini's Stage 2 Trend Template combined with Volatility Contraction Pattern analysis, net revenue trend, EPS growth, and upcoming catalyst events â applied to every ASX stock with market cap over $100M.</p>
   <div class="hero-stats">
     <div class="hs"><div class="hs-n" style="color:var(--green)">{len(breakouts)}</div><div class="hs-l">Breakouts Today</div></div>
     <div class="hs"><div class="hs-n" style="color:var(--blue)">{len(pivots)}</div><div class="hs-l">Near Pivot</div></div>
@@ -154,15 +171,13 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
   </div>
 </div>
 
-<!-- strategy section omitted for brevity — kept from original -->
-
 <div class="section" id="picks">
-  <div class="stitle">🏆 Top 10 ASX Stock Picks Today</div>
-  <div class="ssub">Highest conviction SEPA + VCP setups from today's Moomoo data — ranked by combined score. Click any card to jump to full analysis.</div>
+  <div class="stitle">ð Top 10 ASX Stock Picks Today</div>
+  <div class="ssub">Highest conviction SEPA + VCP setups â ranked by combined score. Click any card to jump to full analysis including fundamentals and upcoming catalysts.</div>
   <div class="picks-grid">{top_html}</div>
   <p style="font-size:11px;color:var(--muted);margin-top:16px;line-height:1.7">
     <strong style="color:#c9d1d9">How to read these picks:</strong> Each card shows the SEPA score (green pips, out of 7) and VCP score (blue pips, out of 4).
-    Breakout stocks are already moving — consider entry at market with stop below MA50. Near Pivot stocks are setting up — add to watchlist and set an alert at the recent high.
+    Breakout stocks are already moving â consider entry at market with stop below MA50. Near Pivot stocks are setting up â add to watchlist and set an alert at the recent high.
     Always size positions at 1-2% risk per trade and never chase a stock that has already moved 5%+ from the ideal entry point.
   </p>
 </div>
@@ -170,18 +185,18 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
 <div id="screener">
 <div class="toolbar">
   <button class="fbtn on" onclick="setF('all',this)">All ({n})</button>
-  <button class="fbtn" onclick="setF('breakout',this)">🟢 Breakout ({len(breakouts)})</button>
-  <button class="fbtn" onclick="setF('near-pivot',this)">🔵 Near Pivot ({len(pivots)})</button>
-  <button class="fbtn" onclick="setF('watch',this)">🟡 Watch ({len(watching)})</button>
-  <input class="srch" id="srch" placeholder="🔍 Ticker or name..." oninput="render()">
+  <button class="fbtn" onclick="setF('breakout',this)">ð¢ Breakout ({len(breakouts)})</button>
+  <button class="fbtn" onclick="setF('near-pivot',this)">ðµ Near Pivot ({len(pivots)})</button>
+  <button class="fbtn" onclick="setF('watch',this)">ð¡ Watch ({len(watching)})</button>
+  <input class="srch" id="srch" placeholder="ð Ticker or name..." oninput="render()">
   <select id="srt" onchange="render()">
-    <option value="sepa">↓ SEPA Score</option>
-    <option value="vcp">↓ VCP Score</option>
-    <option value="vol">↓ Volume Ratio</option>
-    <option value="pvr">↓ PVR</option>
-    <option value="fund">↓ Fund Score</option>
-    <option value="p250">↓ 12M Performance</option>
-    <option value="mc">↓ Market Cap</option>
+    <option value="sepa">â SEPA Score</option>
+    <option value="vcp">â VCP Score</option>
+    <option value="vol">â Volume Ratio</option>
+    <option value="pvr">â PVR</option>
+    <option value="fund">â Fund Score</option>
+    <option value="p250">â 12M Performance</option>
+    <option value="mc">â Market Cap</option>
   </select>
   <select id="sec" onchange="render()"><option value="">All Sectors</option>{sector_opts}</select>
   <span class="cnt" id="cnt"></span>
@@ -191,7 +206,7 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
     <th>#</th><th>Ticker</th><th>Signal</th>
     <th>SEPA /7</th><th>VCP /4</th>
     <th>Price</th><th>Today</th><th>Rel.Vol</th><th>PVR</th>
-    <th>Fund /3</th><th>Catalyst / Event</th>
+    <th>Fund /3</th><th>Net Revenue</th><th>Catalyst / Event</th>
     <th>12M</th><th>Mkt Cap</th><th>Sector</th>
   </tr></thead>
   <tbody id="tbody"></tbody>
@@ -199,8 +214,8 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
 </div>
 
 <footer>
-  <strong>SEPA + VCP ASX Screener</strong> · Data sourced from Moomoo · Generated {today_str}<br>
-  <span style="font-size:11px;opacity:.6">⚠️ This screener is for educational and research purposes only. It does not constitute financial advice. Past performance is not indicative of future results. Always conduct your own research and consult a licensed financial adviser before making investment decisions. All prices in AUD.</span>
+  <strong>SEPA + VCP ASX Screener</strong> Â· Data sourced from Yahoo Finance Â· Generated {today_str}<br>
+  <span style="font-size:11px;opacity:.6">â ï¸ This screener is for educational and research purposes only. It does not constitute financial advice. Past performance is not indicative of future results. Always conduct your own research and consult a licensed financial adviser before making investment decisions. All prices in AUD.</span>
 </footer>
 
 <script>
@@ -218,6 +233,40 @@ function jmp(t){{
   document.getElementById('screener').scrollIntoView({{behavior:'smooth'}});
   document.getElementById('srch').value=t;
   setTimeout(()=>{{render();const r=document.querySelector('#tbody tr');if(r)r.click();}},400);
+}}
+
+function fmtGrowth(v,hi=20,med=5){{
+  if(v===null||v===undefined)return'<span style="color:#484f58">N/A</span>';
+  const col=v>=hi?'#2ea043':v>=med?'#d29922':v>=0?'#8b949e':'#f85149';
+  const arrow=v>0?'â ':v<0?'â ':'';
+  return`<span style="color:${{col}};font-weight:700">${{arrow}}${{v>=0?'+':''}}${{v}}%</span>`;
+}}
+
+function revTrendChip(trend){{
+  if(!trend)return'';
+  const map={{
+    'accelerating':['trend-chip trend-acc','ââ Accelerating'],
+    'growing':['trend-chip trend-grow','â Growing'],
+    'flat':['trend-chip trend-flat','â Flat'],
+    'declining':['trend-chip trend-dec','â Declining'],
+  }};
+  const [cls,lbl]=map[trend]||['',''];
+  return cls?`<div class="${{cls}}">${{lbl}}</div>`:'';
+}}
+
+function revBars(quarters){{
+  if(!quarters||!quarters.length)return'<div style="color:#484f58;font-size:10px">No quarterly data</div>';
+  const vals=quarters.map(q=>q[1]);
+  const mx=Math.max(...vals.map(Math.abs),1);
+  const bars=quarters.slice().reverse().map(([lbl,val])=>{{
+    const pct=Math.round(Math.abs(val)/mx*100);
+    const col=val>=0?'#2ea043':'#f85149';
+    return`<div class="rev-bar-wrap">
+      <div class="rev-bar" style="height:${{pct}}%;background:${{col}};width:100%"></div>
+      <div class="rev-bar-lbl">${{lbl}}</div>
+    </div>`;
+  }}).join('');
+  return`<div class="rev-bars">${{bars}}</div>`;
 }}
 
 function render(){{
@@ -241,7 +290,7 @@ function render(){{
     return 0;
   }});
   document.getElementById('cnt').textContent=d.length+' shown';
-  if(!d.length){{document.getElementById('tbody').innerHTML='<tr><td colspan="14"><div class="empty">No stocks match</div></td></tr>';return;}}
+  if(!d.length){{document.getElementById('tbody').innerHTML='<tr><td colspan="15"><div class="empty">No stocks match</div></td></tr>';return;}}
   document.getElementById('tbody').innerHTML=d.map((r,i)=>row(r,i)).join('');
 }}
 
@@ -256,35 +305,38 @@ function row(r,i){{
   const vc=r.volRatio>=2?'vhigh':r.volRatio>=1.5?'vmed':'vlow';
   const p2=r.pvr>=1.5?'pvg':r.pvr>=1?'pvo':'pvw';
   const q2=r.chg250d>=0?'gn':'rd';
+
+  // Net revenue cell
+  let revCell='<span style="color:#484f58;font-size:10px">N/A</span>';
+  if(r.revGrowth!==null&&r.revGrowth!==undefined){{
+    const trendIcons={{'accelerating':'ââ','growing':'â','flat':'â','declining':'â'}};
+    const trendCols={{'accelerating':'#2ea043','growing':'#8bc34a','flat':'#d29922','declining':'#f85149'}};
+    const icon=trendIcons[r.revTrend]||'';
+    const col=trendCols[r.revTrend]||(r.revGrowth>=0?'#8b949e':'#f85149');
+    revCell=`<span style="color:${{col}};font-weight:700;font-size:11px">${{icon}} ${{r.revGrowth>=0?'+':''}}${{r.revGrowth}}%</span>`;
+  }}
+
   // catalyst / event cell
-  let evCell='<span style="color:#484f58;font-size:10px">—</span>';
+  let evCell='<span style="color:#484f58;font-size:10px">â</span>';
   if(r.nextEventLabel){{
-    const hot=r.nextEventLabel.includes('⚡');
+    const hot=r.nextEventLabel.includes('â¡');
     const ec=hot?'var(--gold)':'var(--blue)';
     evCell=`<span style="color:${{ec}};font-size:10px;font-weight:700">${{r.nextEventLabel}}</span>`;
   }}
-  return `<tr onclick="tog(${{i}})"><td style="color:#484f58;font-size:10px">${{i+1}}</td><td><div class="tkr">${{r.ticker}}</div><div class="co" title="${{r.name}}">${{r.name}}</div></td><td>${{bdg}}</td><td><div style="display:flex;align-items:center;gap:3px"><div class="pips">${{ps}}</div><span style="font-size:10px;color:var(--muted)">${{sc}}</span></div></td><td><div class="vpips">${{vs}}</div></td><td><span class="pv">$${{r.price}}</span></td><td><span class="${{cc}}">${{(r.change>0?'+':'')+r.change}}%</span></td><td><span class="${{vc}}">${{r.volRatio}}x</span></td><td><span class="${{p2}}">${{r.pvr}}</span></td><td><div class="fpips" style="display:flex;gap:2px">${{fps}}</div><span style="font-size:9px;color:var(--muted);margin-left:3px">${{fs}}/3</span></td><td style="white-space:nowrap">${{evCell}}</td><td><span class="${{q2}}">${{(r.chg250d>=0?'+':'')+r.chg250d}}%</span></td><td class="mc">${{r.mktcapFmt}}</td><td class="sec" title="${{r.sector}}">${{r.sector||''}}</td></tr><tr class="drow" id="d${{i}}" style="display:none"><td colspan="14">${{det(r)}}</td></tr>`;
+  return `<tr onclick="tog(${{i}})"><td style="color:#484f58;font-size:10px">${{i+1}}</td><td><div class="tkr">${{r.ticker}}</div><div class="co" title="${{r.name}}">${{r.name}}</div></td><td>${{bdg}}</td><td><div style="display:flex;align-items:center;gap:3px"><div class="pips">${{ps}}</div><span style="font-size:10px;color:var(--muted)">${{sc}}</span></div></td><td><div class="vpips">${{vs}}</div></td><td><span class="pv">$${{r.price}}</span></td><td><span class="${{cc}}">${{(r.change>0?'+':'')+r.change}}%</span></td><td><span class="${{vc}}">${{r.volRatio}}x</span></td><td><span class="${{p2}}">${{r.pvr}}</span></td><td><div class="fpips" style="display:flex;gap:2px">${{fps}}</div><span style="font-size:9px;color:var(--muted);margin-left:3px">${{fs}}/3</span></td><td style="white-space:nowrap">${{revCell}}</td><td style="white-space:nowrap">${{evCell}}</td><td><span class="${{q2}}">${{(r.chg250d>=0?'+':'')+r.chg250d}}%</span></td><td class="mc">${{r.mktcapFmt}}</td><td class="sec" title="${{r.sector}}">${{r.sector||''}}</td></tr><tr class="drow" id="d${{i}}" style="display:none"><td colspan="15">${{det(r)}}</td></tr>`;
 }}
 
 function det(r){{
   const c=r.checks;
-  const cr=[[c.ma50,`Price ($${{r.price}}) > MA50 ($${{r.ma50}})`],[c.ma150,`MA50 > MA150 ($${{r.ma150}})`],[c.ma200,`MA150 > MA200 ($${{r.ma200}})`],[c.trend,`200-day MA trending up (12M: ${{(r.chg250d>=0?'+':'')+r.chg250d}}%)`],[c.high,`Within 25% of 52W high (${{r.pctFromHigh}}% below)`],[c.low,`25%+ above 52W low (${{r.pctAboveLow}}% above)`],[c.vol,`Volume breakout ≥1.5x (${{r.volRatio}}x) + PVR ${{r.pvr}}`]].map(([ok,l])=>`<div class="cr ${{ok?'ok':'no'}}"><span class="ci">${{ok?'✓':'✗'}}</span>${{l}}</div>`).join('');
+  const cr=[[c.ma50,`Price ($${{r.price}}) > MA50 ($${{r.ma50}})`],[c.ma150,`MA50 > MA150 ($${{r.ma150}})`],[c.ma200,`MA150 > MA200 ($${{r.ma200}})`],[c.trend,`200-day MA trending up (12M: ${y(r.chg250d>=0?'+':'')+r.chg250d}}%)`],[c.high,`Within 25% of 52W high (${{r.pctFromHigh}}% below)`],[c.low,`25%+ above 52W low (${{r.pctAboveLow}}% above)`],[c.vol,`Volume breakout â¥1.5x (${{r.volRatio}}x) + PVR ${{r.pvr}}`]].map(([ok,l])=>`<div class="cr ${{ok?'ok':'no'}}"><span class="ci">${{ok?'â':'â'}}</span>${{l}}</div>`).join('');
   const mx=Math.max(r.price,r.ma50,r.ma150,r.ma200);
   const mb=(lb,v,col)=>`<tr><td class="mlb">${{lb}}</td><td class="mbar"><div class="mbw"><div class="mbi" style="width:${{Math.round(v/mx*100)}}%;background:${{col}}"></div></div></td><td class="mvl">$${{v}}</td></tr>`;
-  const vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) — VCP forming','Ideal (4/4) — textbook base'][r.vcpScore];
+  const vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) â VCP forming','Ideal (4/4) â textbook base'][r.vcpScore];
   const ac=r.status==='breakout'?'abuy':r.status==='near-pivot'?'awch':'ahld';
-  const at=r.status==='breakout'?'→ BUY ZONE: Consider entry. Stop-loss below MA50. Risk 1-2% portfolio.':r.status==='near-pivot'?'→ WATCHLIST: Set alert at pivot high. Enter on breakout with vol >1.5x.':'→ MONITOR: Wait for VCP to tighten and volume to dry up.';
+  const at=r.status==='breakout'?'â BUY ZONE: Consider entry. Stop-loss below MA50. Risk 1-2% portfolio.':r.status==='near-pivot'?'â WATCHLIST: Set alert at pivot high. Enter on breakout with vol >1.5x.':'â MONITOR: Wait for VCP to tighten and volume to dry up.';
 
-  // ── Fundamentals column ────────────────────────────────────────────────────
-  const rg=r.revGrowth,eg=r.epsGrowth,nm=r.netMargin,te=r.trailingEps,fe=r.forwardEps,fs=r.fundScore||0;
-
-  function fmtGrowth(v, threshHigh=20, threshMed=5){{
-    if(v===null||v===undefined)return '<span style="color:#484f58">N/A</span>';
-    const col=v>=threshHigh?'#2ea043':v>=threshMed?'#d29922':v>=0?'#8b949e':'#f85149';
-    const arrow=v>0?'↑ ':v<0?'↓ ':'';
-    return `<span style="color:${{col}};font-weight:700">${{arrow}}${{v>=0?'+':''}}${{v}}%</span>`;
-  }}
-
+  // ââ Fundamentals column ââââââââââââââââââââââââââââââââââââââââââââââââ
+  const rg=r.revGrowth, eg=r.epsGrowth, nm=r.netMargin, te=r.trailingEps, fe=r.forwardEps, fs=r.fundScore||0;
   const fpips=Array.from({{length:3}},(_,j)=>`<div class="fpip" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${{j<fs?'#d29922':'#21262d'}};border:1px solid ${{j<fs?'#d29922':'#30363d'}}"></div>`).join('&nbsp;');
 
   let epsRows='';
@@ -293,34 +345,45 @@ function det(r){{
   let nmRow='';
   if(nm!==null&&nm!==undefined){{const mc=nm>=15?'#2ea043':nm>0?'#d29922':'#f85149';nmRow=`<div class="pi"><span class="pk">Net Margin</span><span style="color:${{mc}}">${{nm}}%</span></div>`;}}
 
-  // ── Upcoming events column ─────────────────────────────────────────────────
-  let evHtml='<div class="ev-none">No upcoming events found</div>';
-  if(r.nextEventLabel){{
-    const hot=r.nextEventLabel.includes('⚡');
-    evHtml=`<div class="${{hot?'ev-hot':'ev-soon'}}">${{r.nextEventLabel}}</div>`;
-  }}
-  if(r.nextExDiv){{
-    evHtml+=`<div class="ev-div">💰 Ex-Dividend: ${{r.nextExDiv}}</div>`;
-  }}
-  if(r.nextEarnings){{
-    evHtml+=`<div style="font-size:10px;color:#484f58;margin-top:4px">Date: ${{r.nextEarnings}}</div>`;
-  }}
-
   const fundCol=`
     <div>
-      <div class="dh">Fundamentals &nbsp;${{fpips}}</div>
+      <div class="dh">Net Revenue Trend &nbsp;${{fpips}}</div>
+      ${{revTrendChip(r.revTrend)}}
+      ${{revBars(r.revQuarters)}}
       <table class="mat">
         <tr><td class="mlb">Rev YoY</td><td colspan="2">${{fmtGrowth(rg)}}</td></tr>
         <tr><td class="mlb">EPS Grw</td><td colspan="2">${{fmtGrowth(eg,10,0)}}</td></tr>
       </table>
       <div class="pg2" style="margin-top:8px">${{nmRow}}${{epsRows}}</div>
-      <div class="dh" style="margin-top:12px">Upcoming Events</div>
+    </div>`;
+
+  // ââ Upcoming events column âââââââââââââââââââââââââââââââââââââââââââââ
+  let evHtml='<div class="ev-none">No upcoming events found</div>';
+  const evLines=[];
+  if(r.nextEventLabel){{
+    const hot=r.nextEventLabel.includes('â¡');
+    evLines.push(`<div class="${{hot?'ev-hot':'ev-soon'}}">${{r.nextEventLabel}}</div>`);
+    if(r.nextEarnings){{
+      evLines.push(`<div style="font-size:10px;color:#484f58;margin-top:3px">ð ${{r.nextEarnings}}</div>`);
+    }}
+  }}
+  if(r.nextExDiv){{
+    evLines.push(`<div class="ev-div">ð° Ex-Dividend: ${{r.nextExDiv}}</div>`);
+  }}
+  if(evLines.length){{
+    evHtml=evLines.join('');
+  }}
+
+  const evCol=`
+    <div>
+      <div class="dh">Catalyst &amp; Upcoming Events</div>
       ${{evHtml}}
+      <div class="abox" style="margin-top:12px">${{r.analysis}}<div class="aact ${{ac}}">${{at}}</div></div>
     </div>`;
 
   return `<div class="dpanel">
     <div>
-      <div class="dh">SEPA Checklist — ${{r.sepaScore}}/7</div>
+      <div class="dh">SEPA Checklist â ${{r.sepaScore}}/7</div>
       <div class="cl">${{cr}}</div>
     </div>
     <div>
@@ -338,7 +401,7 @@ function det(r){{
       </div>
     </div>
     ${{fundCol}}
-    <div class="abox">${{r.analysis}}<div class="aact ${{ac}}">${{at}}</div></div>
+    ${{evCol}}
   </div>`;
 }}
 
