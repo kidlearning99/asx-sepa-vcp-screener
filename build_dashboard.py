@@ -12,7 +12,11 @@ def fmt_pct(v):
 
 def build(data, source="Yahoo Finance (live)"):
     today_str = date.today().strftime("%d %b %Y")
-    json_data  = json.dumps(data)
+    def _jsafe(o):
+        if hasattr(o, 'item'): return o.item()
+        if hasattr(o, '__float__'): return float(o)
+        raise TypeError(repr(o))
+    json_data  = json.dumps(data, default=_jsafe)
 
     n          = len(data)
     breakouts  = [r for r in data if r["status"] == "breakout"]
