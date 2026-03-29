@@ -1,9 +1,9 @@
 """
-build_dashboard.py â builds the HTML dashboard from screener data
+build_dashboard.py - builds the HTML dashboard from screener data
 Called by screener.py
 """
 from datetime import date
-import json
+import json, os
 
 
 def fmt_pct(v):
@@ -27,7 +27,7 @@ def build(data, source="Yahoo Finance (live)"):
         reverse=True
     )[:10]
 
-    medals   = ["ð¥","ð¥","ð¥","4ï¸â£","5ï¸â£","6ï¸â£","7ï¸â£","8ï¸â£","9ï¸â£","ð"]
+    medals   = ["\U0001f947","\U0001f948","\U0001f949","4\ufe0f\u20e3","5\ufe0f\u20e3","6\ufe0f\u20e3","7\ufe0f\u20e3","8\ufe0f\u20e3","9\ufe0f\u20e3","\U0001f51f"]
     top_html = ""
     for i, r in enumerate(top):
         sc    = r["sepaScore"]
@@ -38,23 +38,61 @@ def build(data, source="Yahoo Finance (live)"):
         badge_bg    = "46,160,67" if r["status"] == "breakout" else "56,139,253"
         badge_label = "BREAKOUT"  if r["status"] == "breakout" else "NEAR PIVOT"
 
-        # event + revenue badge for top-picks card
+        # event badge for top-picks card
         ev_html = ""
         nl = r.get("nextEventLabel")
         if nl:
-            ev_col = "#f0e040" if "â¡" in nl else "#388bfd"
-            ev_bg  = "rgba(240,224,64,.1)" if "â¡" in nl else "rgba(56,139,253,.1)"
-            ev_bd  = "rgba(240,224,64,.3)" if "â¡" in nl else "rgba(56,139,253,.3)"
-            ev_html += (f'<div style="margin-top:5px;font-size:10px;font-weight:700;'
+            ev_col = "#f0e040" if "\u26a1" in nl else "#388bfd"
+            ev_bg  = "rgba(240,224,64,.1)" if "\u26a1" in nl else "rgba(56,139,253,.1)"
+            ev_bd  = "rgba(240,224,64,.3)" if "\u26a1" in nl else "rgba(56,139,253,.3)"
+            ev_html = (f'<div style="margin-top:5px;font-size:10px;font-weight:700;'
                        f'color:{ev_col};background:{ev_bg};border:1px solid {ev_bd};'
                        f'border-radius:4px;padding:2px 6px;display:inline-block">{nl}</div>')
+
+        # fundamental badges for top-picks card
+        fund_html = ""
+        rg = r.get("revGrowth")
         rt = r.get("revTrend")
-        if rt in ("accelerating", "growing"):
-            rt_col = "#2ea043" if rt == "accelerating" else "#8bc34a"
-            rt_lbl = "ââ Rev Accelerating" if rt == "accelerating" else "â Rev Growing"
-            ev_html += (f'<div style="margin-top:4px;font-size:10px;font-weight:700;'
-                       f'color:{rt_col};background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);'
-                       f'border-radius:4px;padding:2px 6px;display:inline-block">{rt_lbl}</div>')
+        eg = r.get("epsGrowth")
+        rq = r.get("revQuarters", [])
+
+        # Revenue trend badge
+        rev_badge = ""
+        if rg is not None:
+            if rg > 20:
+                rev_badge = f'<span class="fund-badge fund-strong">\u2191\u2191 Rev +{rg}%</span>'
+            elif rg > 5:
+                rev_badge = f'<span class="fund-badge fund-good">\u2191 Rev +{rg}%</span>'
+            elif rg > 0:
+                rev_badge = f'<span class="fund-badge fund-flat">Rev +{rg}%</span>'
+            else:
+                rev_badge = f'<span class="fund-badge fund-neg">\u2193 Rev {rg}%</span>'
+
+        # EPS trend badge
+        eps_badge = ""
+        if eg is not None:
+            if eg > 10:
+                eps_badge = f'<span class="fund-badge fund-strong">\u2191 EPS +{eg}%</span>'
+            elif eg > 0:
+                eps_badge = f'<span class="fund-badge fund-good">EPS +{eg}%</span>'
+            else:
+                eps_badge = f'<span class="fund-badge fund-neg">\u2193 EPS {eg}%</span>'
+
+        # Mini quarterly revenue bar chart
+        rev_bars = ""
+        if rq and len(rq) >= 2:
+            max_rev = max(abs(q[1]) for q in rq if q[1] != 0) if rq else 1
+            bars = ""
+            for lbl, val in reversed(rq[:4]):
+                pct = int(abs(val) / max_rev * 100) if max_rev > 0 else 0
+                bar_col = "#2ea043" if val > 0 else "#f85149"
+                bars += (f'<div style="display:flex;align-items:flex-end;gap:0;flex-direction:column;text-align:center">'
+                         f'<div style="width:14px;height:{max(pct * 28 // 100, 3)}px;background:{bar_col};border-radius:2px 2px 0 0;opacity:0.8"></div>'
+                         f'<div style="font-size:7px;color:#7d8590;margin-top:1px">{lbl[:3]}</div></div>')
+            rev_bars = f'<div style="display:flex;gap:3px;align-items:flex-end;margin-top:4px">{bars}</div>'
+
+        if rev_badge or eps_badge or rev_bars:
+            fund_html = f'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;align-items:flex-end">{rev_badge}{eps_badge}{rev_bars}</div>'
 
         top_html += f'''<div class="tc" onclick="jmp('{r["ticker"]}')" >
 <span style="font-size:20px;flex-shrink:0">{medals[i]}</span>
@@ -71,6 +109,7 @@ def build(data, source="Yahoo Finance (live)"):
     <span style="color:{"#2ea043" if r["volRatio"]>=1.5 else "#d29922"}">{r["volRatio"]}x vol</span>
   </div>
   <div style="font-size:11px;color:#7d8590;margin-top:5px;line-height:1.4">{r["shortSignal"]}</div>
+  {fund_html}
   {ev_html}
 </div>
 </div>'''
@@ -79,7 +118,8 @@ def build(data, source="Yahoo Finance (live)"):
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SEPA+VCP ASX Screener â {today_str}</title>
+<title>SEPA+VCP ASX Screener with Fundamentals \u2014 {today_str}</title>
+<meta name="description" content="ASX stock screener combining Minervini SEPA trend template, VCP pattern analysis, net revenue growth, EPS trends, and upcoming catalysts. Updated daily.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -94,17 +134,23 @@ nav{{background:#010409;border-bottom:1px solid var(--border);padding:12px 28px;
 .hero{{background:linear-gradient(180deg,#010409,var(--bg));padding:56px 28px 40px;text-align:center;border-bottom:1px solid var(--border)}}
 .hero h1{{font-size:38px;font-weight:800;color:#fff;letter-spacing:-1px;line-height:1.1}}
 .hero h1 span{{background:linear-gradient(90deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}}
-.hero p{{font-size:15px;color:var(--muted);margin:12px auto 0;max-width:580px;line-height:1.7}}
+.hero p{{font-size:15px;color:var(--muted);margin:12px auto 0;max-width:620px;line-height:1.7}}
 .hero-stats{{display:flex;justify-content:center;gap:36px;margin-top:30px;flex-wrap:wrap}}
 .hs{{text-align:center}}.hs-n{{font-size:34px;font-weight:800;font-family:'JetBrains Mono'}}.hs-l{{font-size:12px;color:var(--muted);margin-top:2px}}
 .section{{padding:44px 28px;border-bottom:1px solid var(--border)}}
 .stitle{{font-size:22px;font-weight:800;color:#fff;margin-bottom:5px}}.ssub{{font-size:14px;color:var(--muted);margin-bottom:28px}}
-.picks-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}}
-.tc{{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s;display:flex;gap:10px}}.tc:hover{{border-color:var(--blue)}}
+.picks-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}}
+.tc{{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s,transform .15s;display:flex;gap:10px}}.tc:hover{{border-color:var(--blue);transform:translateY(-2px)}}
 .tc-body{{flex:1;min-width:0}}
 .pips,.vpips{{display:flex;gap:2px}}.pip{{width:7px;height:7px;border-radius:1px}}.pg{{background:var(--green)}}.pa{{background:var(--amber)}}.pr{{background:var(--red)}}.po{{background:var(--bg3);border:1px solid var(--border)}}
 .vp{{width:8px;height:8px;border-radius:2px}}.von{{background:var(--blue)}}.voff{{background:var(--bg3);border:1px solid var(--border)}}
 .fpip{{width:8px;height:8px;border-radius:2px}}.fon{{background:var(--amber)}}.foff{{background:var(--bg3);border:1px solid var(--border)}}
+/* fund badges in cards */
+.fund-badge{{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.3px}}
+.fund-strong{{background:rgba(46,160,67,.12);color:#2ea043;border:1px solid rgba(46,160,67,.25)}}
+.fund-good{{background:rgba(210,153,34,.1);color:#d29922;border:1px solid rgba(210,153,34,.25)}}
+.fund-flat{{background:rgba(139,148,158,.08);color:#8b949e;border:1px solid rgba(139,148,158,.2)}}
+.fund-neg{{background:rgba(248,81,73,.08);color:#f85149;border:1px solid rgba(248,81,73,.2)}}
 .toolbar{{padding:10px 28px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;background:var(--bg);border-bottom:1px solid var(--b2);position:sticky;top:49px;z-index:90}}
 .fbtn{{padding:4px 11px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--muted);transition:all .12s;white-space:nowrap}}
 .fbtn.on{{border-color:var(--blue);background:rgba(56,139,253,.12);color:var(--blue)}}.fbtn:hover:not(.on){{border-color:var(--muted);color:var(--text)}}
@@ -112,42 +158,38 @@ input.srch,select{{background:var(--bg3);border:1px solid var(--border);color:va
 input.srch{{width:150px}}input.srch::placeholder{{color:var(--muted)}}input.srch:focus,select:focus{{border-color:var(--blue)}}
 .cnt{{font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap}}
 .twrap{{margin:0 28px 28px;border:1px solid var(--border);border-radius:10px;overflow:hidden;overflow-x:auto}}
-table{{width:100%;border-collapse:collapse;min-width:980px}}
+table{{width:100%;border-collapse:collapse;min-width:1060px}}
 thead th{{background:var(--bg2);padding:9px 11px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);white-space:nowrap}}
 tbody tr{{border-bottom:1px solid var(--b2);cursor:pointer;transition:background .08s}}tbody tr:hover{{background:var(--bg2)}}tbody tr:last-child{{border-bottom:none}}
 tbody td{{padding:9px 11px;vertical-align:middle}}
 .tkr{{font-weight:800;font-size:14px;font-family:'JetBrains Mono';color:#fff}}.co{{font-size:10px;color:var(--muted);margin-top:1px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .badge{{display:inline-flex;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}}
 .bb{{background:rgba(46,160,67,.15);color:var(--green);border:1px solid rgba(46,160,67,.35)}}.bp{{background:rgba(56,139,253,.15);color:var(--blue);border:1px solid rgba(56,139,253,.35)}}.bw{{background:rgba(210,153,34,.15);color:var(--amber);border:1px solid rgba(210,153,34,.35)}}
-.pv{{font-family:'JetBrains Mono';font-size:13px;font-weight:600}}.gn}{color:var(--green)}}.rd{{color:var(--red)}}.gy{{color:var(--muted)}}
+.pv{{font-family:'JetBrains Mono';font-size:13px;font-weight:600}}.gn{{color:var(--green)}}.rd{{color:var(--red)}}.gy{{color:var(--muted)}}
 .vhigh{{color:var(--green);font-weight:700}}.vmed{{color:var(--amber);font-weight:600}}.vlow{{color:var(--muted)}}
 .pvg{{color:var(--green);font-weight:600}}.pvo{{color:var(--amber)}}.pvw{{color:var(--muted)}}
 .sec{{font-size:10px;color:#8b949e;max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.sig{{font-size:11px;color:#c9d1d9;line-height:1.4;max-width:200px}}.mc{{font-family:'JetBrains Mono';font-size:11px;color:#8b949e}}
 /* detail panel */
-.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 170px 1fr 1fr;gap:18px;border-top:1px solid var(--b2)}}
+.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 170px 200px 1fr;gap:18px;border-top:1px solid var(--b2)}}
 .dh{{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px}}
 .cl{{display:flex;flex-direction:column;gap:3px}}.cr{{display:flex;align-items:flex-start;gap:5px;font-size:11px;line-height:1.5}}.cr.ok{{color:var(--green)}}.cr.no{{color:#484f58}}.ci{{width:12px;flex-shrink:0;font-size:10px;margin-top:1px}}
 .mat{{width:100%;border-collapse:collapse;font-size:11px}}.mat td{{padding:2px 0}}.mlb{{color:var(--muted);width:56px}}.mbar{{padding:2px 6px;width:110px}}.mbw{{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}}.mbi{{height:100%;border-radius:3px}}.mvl{{font-family:'JetBrains Mono';color:#8b949e;text-align:right;width:62px}}
 .abox{{background:var(--bg2);border-radius:8px;padding:13px;border-left:3px solid var(--border);font-size:12px;color:#8b949e;line-height:1.8}}.aact{{margin-top:9px;font-weight:700;font-size:12px;padding:7px 11px;border-radius:6px}}
 .abuy{{color:var(--green);background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2)}}.awch{{color:var(--blue);background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2)}}.ahld{{color:var(--amber);background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2)}}
 .pg2{{display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:10px;margin-top:9px}}.pi{{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--b2)}}.pi:last-child{{border:none}}.pk{{color:var(--muted)}}
-/* revenue sparkbar */
-.rev-bars{{display:flex;align-items:flex-end;gap:3px;height:36px;margin:6px 0}}
-.rev-bar-wrap{{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1}}
-.rev-bar{{width:100%;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}}
-.rev-bar-lbl{{font-size:8px;color:var(--muted)}}
 /* event badges */
 .ev-hot{{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:800;background:rgba(240,224,64,.1);color:var(--gold);border:1px solid rgba(240,224,64,.35);margin-top:6px}}
 .ev-soon{{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:700;background:rgba(56,139,253,.1);color:var(--blue);border:1px solid rgba(56,139,253,.3);margin-top:6px}}
 .ev-div{{font-size:10px;color:var(--amber);margin-top:5px}}
 .ev-none{{font-size:10px;color:#484f58;margin-top:6px}}
-.trend-chip{{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-bottom:6px}}
-.trend-acc{{background:rgba(46,160,67,.12);color:var(--green);border:1px solid rgba(46,160,67,.3)}}
-.trend-grow{{background:rgba(139,195,74,.1);color:#8bc34a;border:1px solid rgba(139,195,74,.25)}}
-.trend-flat{{background:rgba(210,153,34,.1);color:var(--amber);border:1px solid rgba(210,153,34,.25)}}
-.trend-dec{{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)}}
 /* fund score row in table */
 .fpips{{display:flex;gap:2px}}
+/* revenue bar chart in detail panel */
+.rev-chart{{display:flex;align-items:flex-end;gap:6px;margin-top:8px;padding:6px 0}}
+.rev-bar-col{{display:flex;flex-direction:column;align-items:center;gap:2px}}
+.rev-bar{{width:22px;border-radius:3px 3px 0 0;transition:height .3s}}
+.rev-lbl{{font-size:8px;color:var(--muted)}}
+.rev-val{{font-size:8px;font-family:'JetBrains Mono';color:#8b949e}}
 .empty{{text-align:center;padding:50px;color:var(--muted)}}
 footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;text-align:center;font-size:11px;color:var(--muted)}}
 @media(max-width:700px){{.dpanel{{grid-template-columns:1fr!important}}}}
@@ -157,12 +199,12 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
 <nav>
   <div class="nlogo"><div class="ndot"></div>SEPA+VCP ASX Screener</div>
   <div class="nlinks"><a href="#picks">Top Picks</a><a href="#screener">Full Screener</a></div>
-  <span class="nbadge">â Live â {today_str}</span>
+  <span class="nbadge">\u25cf Live \u2014 {today_str}</span>
 </nav>
 
 <div class="hero">
   <h1>ASX Stock Screener<br><span>SEPA + VCP + Fundamentals</span></h1>
-  <p>Minervini's Stage 2 Trend Template combined with Volatility Contraction Pattern analysis, net revenue trend, EPS growth, and upcoming catalyst events â applied to every ASX stock with market cap over $100M.</p>
+  <p>Minervini's Stage 2 Trend Template combined with Volatility Contraction Pattern analysis, net revenue trend, EPS growth, and upcoming catalyst events \u2014 applied to every ASX stock with market cap over $100M.</p>
   <div class="hero-stats">
     <div class="hs"><div class="hs-n" style="color:var(--green)">{len(breakouts)}</div><div class="hs-l">Breakouts Today</div></div>
     <div class="hs"><div class="hs-n" style="color:var(--blue)">{len(pivots)}</div><div class="hs-l">Near Pivot</div></div>
@@ -172,12 +214,12 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
 </div>
 
 <div class="section" id="picks">
-  <div class="stitle">ð Top 10 ASX Stock Picks Today</div>
-  <div class="ssub">Highest conviction SEPA + VCP setups â ranked by combined score. Click any card to jump to full analysis including fundamentals and upcoming catalysts.</div>
+  <div class="stitle">\U0001f3c6 Top 10 ASX Stock Picks Today</div>
+  <div class="ssub">Highest conviction SEPA + VCP setups with fundamental momentum \u2014 ranked by combined score. Click any card to jump to full analysis.</div>
   <div class="picks-grid">{top_html}</div>
   <p style="font-size:11px;color:var(--muted);margin-top:16px;line-height:1.7">
     <strong style="color:#c9d1d9">How to read these picks:</strong> Each card shows the SEPA score (green pips, out of 7) and VCP score (blue pips, out of 4).
-    Breakout stocks are already moving â consider entry at market with stop below MA50. Near Pivot stocks are setting up â add to watchlist and set an alert at the recent high.
+    Breakout stocks are already moving \u2014 consider entry at market with stop below MA50. Near Pivot stocks are setting up \u2014 add to watchlist and set an alert at the recent high.
     Always size positions at 1-2% risk per trade and never chase a stock that has already moved 5%+ from the ideal entry point.
   </p>
 </div>
@@ -185,18 +227,20 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
 <div id="screener">
 <div class="toolbar">
   <button class="fbtn on" onclick="setF('all',this)">All ({n})</button>
-  <button class="fbtn" onclick="setF('breakout',this)">ð¢ Breakout ({len(breakouts)})</button>
-  <button class="fbtn" onclick="setF('near-pivot',this)">ðµ Near Pivot ({len(pivots)})</button>
-  <button class="fbtn" onclick="setF('watch',this)">ð¡ Watch ({len(watching)})</button>
-  <input class="srch" id="srch" placeholder="ð Ticker or name..." oninput="render()">
+  <button class="fbtn" onclick="setF('breakout',this)">\U0001f7e2 Breakout ({len(breakouts)})</button>
+  <button class="fbtn" onclick="setF('near-pivot',this)">\U0001f535 Near Pivot ({len(pivots)})</button>
+  <button class="fbtn" onclick="setF('watch',this)">\U0001f7e1 Watch ({len(watching)})</button>
+  <input class="srch" id="srch" placeholder="\U0001f50d Ticker or name..." oninput="render()">
   <select id="srt" onchange="render()">
-    <option value="sepa">â SEPA Score</option>
-    <option value="vcp">â VCP Score</option>
-    <option value="vol">â Volume Ratio</option>
-    <option value="pvr">â PVR</option>
-    <option value="fund">â Fund Score</option>
-    <option value="p250">â 12M Performance</option>
-    <option value="mc">â Market Cap</option>
+    <option value="sepa">\u2193 SEPA Score</option>
+    <option value="vcp">\u2193 VCP Score</option>
+    <option value="vol">\u2193 Volume Ratio</option>
+    <option value="pvr">\u2193 PVR</option>
+    <option value="fund">\u2193 Fund Score</option>
+    <option value="rev">\u2193 Revenue Growth</option>
+    <option value="eps">\u2193 EPS Growth</option>
+    <option value="p250">\u2193 12M Performance</option>
+    <option value="mc">\u2193 Market Cap</option>
   </select>
   <select id="sec" onchange="render()"><option value="">All Sectors</option>{sector_opts}</select>
   <span class="cnt" id="cnt"></span>
@@ -206,7 +250,7 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
     <th>#</th><th>Ticker</th><th>Signal</th>
     <th>SEPA /7</th><th>VCP /4</th>
     <th>Price</th><th>Today</th><th>Rel.Vol</th><th>PVR</th>
-    <th>Fund /3</th><th>Net Revenue</th><th>Catalyst / Event</th>
+    <th>Fund /3</th><th>Rev Trend</th><th>Catalyst / Event</th>
     <th>12M</th><th>Mkt Cap</th><th>Sector</th>
   </tr></thead>
   <tbody id="tbody"></tbody>
@@ -214,8 +258,8 @@ footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;
 </div>
 
 <footer>
-  <strong>SEPA + VCP ASX Screener</strong> Â· Data sourced from Yahoo Finance Â· Generated {today_str}<br>
-  <span style="font-size:11px;opacity:.6">â ï¸ This screener is for educational and research purposes only. It does not constitute financial advice. Past performance is not indicative of future results. Always conduct your own research and consult a licensed financial adviser before making investment decisions. All prices in AUD.</span>
+  <strong>SEPA + VCP ASX Screener</strong> \u00b7 Data sourced from Yahoo Finance \u00b7 Generated {today_str}<br>
+  <span style="font-size:11px;opacity:.6">\u26a0\ufe0f This screener is for educational and research purposes only. It does not constitute financial advice. Past performance is not indicative of future results. Always conduct your own research and consult a licensed financial adviser before making investment decisions. All prices in AUD.</span>
 </footer>
 
 <script>
@@ -235,40 +279,6 @@ function jmp(t){{
   setTimeout(()=>{{render();const r=document.querySelector('#tbody tr');if(r)r.click();}},400);
 }}
 
-function fmtGrowth(v,hi=20,med=5){{
-  if(v===null||v===undefined)return'<span style="color:#484f58">N/A</span>';
-  const col=v>=hi?'#2ea043':v>=med?'#d29922':v>=0?'#8b949e':'#f85149';
-  const arrow=v>0?'â ':v<0?'â ':'';
-  return`<span style="color:${{col}};font-weight:700">${{arrow}}${{v>=0?'+':''}}${{v}}%</span>`;
-}}
-
-function revTrendChip(trend){{
-  if(!trend)return'';
-  const map={{
-    'accelerating':['trend-chip trend-acc','ââ Accelerating'],
-    'growing':['trend-chip trend-grow','â Growing'],
-    'flat':['trend-chip trend-flat','â Flat'],
-    'declining':['trend-chip trend-dec','â Declining'],
-  }};
-  const [cls,lbl]=map[trend]||['',''];
-  return cls?`<div class="${{cls}}">${{lbl}}</div>`:'';
-}}
-
-function revBars(quarters){{
-  if(!quarters||!quarters.length)return'<div style="color:#484f58;font-size:10px">No quarterly data</div>';
-  const vals=quarters.map(q=>q[1]);
-  const mx=Math.max(...vals.map(Math.abs),1);
-  const bars=quarters.slice().reverse().map(([lbl,val])=>{{
-    const pct=Math.round(Math.abs(val)/mx*100);
-    const col=val>=0?'#2ea043':'#f85149';
-    return`<div class="rev-bar-wrap">
-      <div class="rev-bar" style="height:${{pct}}%;background:${{col}};width:100%"></div>
-      <div class="rev-bar-lbl">${{lbl}}</div>
-    </div>`;
-  }}).join('');
-  return`<div class="rev-bars">${{bars}}</div>`;
-}}
-
 function render(){{
   const srt=document.getElementById('srt').value,
         q=document.getElementById('srch').value.toLowerCase(),
@@ -285,6 +295,8 @@ function render(){{
     if(srt==='vol')  return b.volRatio-a.volRatio;
     if(srt==='pvr')  return b.pvr-a.pvr;
     if(srt==='fund') return (b.fundScore||0)-(a.fundScore||0);
+    if(srt==='rev')  return (b.revGrowth||'-999')-(a.revGrowth||'-999');
+    if(srt==='eps')  return (b.epsGrowth||'-999')-(a.epsGrowth||'-999');
     if(srt==='p250') return b.chg250d-a.chg250d;
     if(srt==='mc')   return b.mktcap-a.mktcap;
     return 0;
@@ -306,20 +318,26 @@ function row(r,i){{
   const p2=r.pvr>=1.5?'pvg':r.pvr>=1?'pvo':'pvw';
   const q2=r.chg250d>=0?'gn':'rd';
 
-  // Net revenue cell
-  let revCell='<span style="color:#484f58;font-size:10px">N/A</span>';
-  if(r.revGrowth!==null&&r.revGrowth!==undefined){{
-    const trendIcons={{'accelerating':'ââ','growing':'â','flat':'â','declining':'â'}};
-    const trendCols={{'accelerating':'#2ea043','growing':'#8bc34a','flat':'#d29922','declining':'#f85149'}};
-    const icon=trendIcons[r.revTrend]||'';
-    const col=trendCols[r.revTrend]||(r.revGrowth>=0?'#8b949e':'#f85149');
-    revCell=`<span style="color:${{col}};font-weight:700;font-size:11px">${{icon}} ${{r.revGrowth>=0?'+':''}}${{r.revGrowth}}%</span>`;
+  // Revenue trend cell
+  let revCell='<span style="color:#484f58;font-size:10px">\u2014</span>';
+  const rg=r.revGrowth;
+  const rt=r.revTrend;
+  if(rg!==null&&rg!==undefined){{
+    let rCol='#8b949e',rArrow='';
+    if(rg>20){{rCol='#2ea043';rArrow='\u2191\u2191 ';}}
+    else if(rg>5){{rCol='#2ea043';rArrow='\u2191 ';}}
+    else if(rg>0){{rCol='#d29922';rArrow='';}}
+    else{{rCol='#f85149';rArrow='\u2193 ';}}
+    let trendTag='';
+    if(rt==='accelerating')trendTag=' <span style="color:#2ea043;font-size:8px;font-weight:800">\u26a1ACC</span>';
+    else if(rt==='growing')trendTag=' <span style="color:#d29922;font-size:8px">\u2191</span>';
+    revCell=`<span style="color:${{rCol}};font-size:10px;font-weight:700">${{rArrow}}${{rg>0?'+':''}}${{rg}}%${{trendTag}}</span>`;
   }}
 
   // catalyst / event cell
-  let evCell='<span style="color:#484f58;font-size:10px">â</span>';
+  let evCell='<span style="color:#484f58;font-size:10px">\u2014</span>';
   if(r.nextEventLabel){{
-    const hot=r.nextEventLabel.includes('â¡');
+    const hot=r.nextEventLabel.includes('\u26a1');
     const ec=hot?'var(--gold)':'var(--blue)';
     evCell=`<span style="color:${{ec}};font-size:10px;font-weight:700">${{r.nextEventLabel}}</span>`;
   }}
@@ -328,15 +346,23 @@ function row(r,i){{
 
 function det(r){{
   const c=r.checks;
-  const cr=[[c.ma50,`Price ($${{r.price}}) > MA50 ($${{r.ma50}})`],[c.ma150,`MA50 > MA150 ($${{r.ma150}})`],[c.ma200,`MA150 > MA200 ($${{r.ma200}})`],[c.trend,`200-day MA trending up (12M: ${y(r.chg250d>=0?'+':'')+r.chg250d}}%)`],[c.high,`Within 25% of 52W high (${{r.pctFromHigh}}% below)`],[c.low,`25%+ above 52W low (${{r.pctAboveLow}}% above)`],[c.vol,`Volume breakout â¥1.5x (${{r.volRatio}}x) + PVR ${{r.pvr}}`]].map(([ok,l])=>`<div class="cr ${{ok?'ok':'no'}}"><span class="ci">${{ok?'â':'â'}}</span>${{l}}</div>`).join('');
+  const cr=[[c.ma50,`Price ($${{r.price}}) > MA50 ($${{r.ma50}})`],[c.ma150,`MA50 > MA150 ($${{r.ma150}})`],[c.ma200,`MA150 > MA200 ($${{r.ma200}})`],[c.trend,`200-day MA trending up (12M: ${{(r.chg250d>=0?'+':'')+r.chg250d}}%)`],[c.high,`Within 25% of 52W high (${{r.pctFromHigh}}% below)`],[c.low,`25%+ above 52W low (${{r.pctAboveLow}}% above)`],[c.vol,`Volume breakout \u22651.5x (${{r.volRatio}}x) + PVR ${{r.pvr}}`]].map(([ok,l])=>`<div class="cr ${{ok?'ok':'no'}}"><span class="ci">${{ok?'\u2713':'\u2717'}}</span>${{l}}</div>`).join('');
   const mx=Math.max(r.price,r.ma50,r.ma150,r.ma200);
   const mb=(lb,v,col)=>`<tr><td class="mlb">${{lb}}</td><td class="mbar"><div class="mbw"><div class="mbi" style="width:${{Math.round(v/mx*100)}}%;background:${{col}}"></div></div></td><td class="mvl">$${{v}}</td></tr>`;
-  const vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) â VCP forming','Ideal (4/4) â textbook base'][r.vcpScore];
+  const vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) \u2014 VCP forming','Ideal (4/4) \u2014 textbook base'][r.vcpScore];
   const ac=r.status==='breakout'?'abuy':r.status==='near-pivot'?'awch':'ahld';
-  const at=r.status==='breakout'?'â BUY ZONE: Consider entry. Stop-loss below MA50. Risk 1-2% portfolio.':r.status==='near-pivot'?'â WATCHLIST: Set alert at pivot high. Enter on breakout with vol >1.5x.':'â MONITOR: Wait for VCP to tighten and volume to dry up.';
+  const at=r.status==='breakout'?'\u2192 BUY ZONE: Consider entry. Stop-loss below MA50. Risk 1-2% portfolio.':r.status==='near-pivot'?'\u2192 WATCHLIST: Set alert at pivot high. Enter on breakout with vol >1.5x.':'\u2192 MONITOR: Wait for VCP to tighten and volume to dry up.';
 
-  // ââ Fundamentals column ââââââââââââââââââââââââââââââââââââââââââââââââ
-  const rg=r.revGrowth, eg=r.epsGrowth, nm=r.netMargin, te=r.trailingEps, fe=r.forwardEps, fs=r.fundScore||0;
+  // Fundamentals column
+  const rg=r.revGrowth,eg=r.epsGrowth,nm=r.netMargin,te=r.trailingEps,fe=r.forwardEps,fs=r.fundScore||0;
+
+  function fmtGrowth(v, threshHigh=20, threshMed=5){{
+    if(v===null||v===undefined)return '<span style="color:#484f58">N/A</span>';
+    const col=v>=threshHigh?'#2ea043':v>=threshMed?'#d29922':v>=0?'#8b949e':'#f85149';
+    const arrow=v>0?'\u2191 ':v<0?'\u2193 ':'';
+    return `<span style="color:${{col}};font-weight:700">${{arrow}}${{v>=0?'+':''}}${{v}}%</span>`;
+  }}
+
   const fpips=Array.from({{length:3}},(_,j)=>`<div class="fpip" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${{j<fs?'#d29922':'#21262d'}};border:1px solid ${{j<fs?'#d29922':'#30363d'}}"></div>`).join('&nbsp;');
 
   let epsRows='';
@@ -345,45 +371,69 @@ function det(r){{
   let nmRow='';
   if(nm!==null&&nm!==undefined){{const mc=nm>=15?'#2ea043':nm>0?'#d29922':'#f85149';nmRow=`<div class="pi"><span class="pk">Net Margin</span><span style="color:${{mc}}">${{nm}}%</span></div>`;}}
 
+  // Quarterly revenue bar chart
+  let revChart='';
+  const rq=r.revQuarters||[];
+  if(rq.length>=2){{
+    const maxRev=Math.max(...rq.map(q=>Math.abs(q[1])));
+    let bars='';
+    const sorted=[...rq].reverse();
+    sorted.forEach(q=>{{
+      const pct=maxRev>0?Math.round(Math.abs(q[1])/maxRev*100):0;
+      const h=Math.max(pct*48/100,4);
+      const col=q[1]>=0?'#2ea043':'#f85149';
+      bars+=`<div class="rev-bar-col"><div class="rev-val">${{q[1]>0?'':''}}${{q[1]}}M</div><div class="rev-bar" style="height:${{h}}px;background:${{col}}"></div><div class="rev-lbl">${{q[0]}}</div></div>`;
+    }});
+    const trendLabel=r.revTrend==='accelerating'?'<span style="color:#2ea043;font-weight:800">\u26a1 Accelerating</span>':r.revTrend==='growing'?'<span style="color:#2ea043">\u2191 Growing QoQ</span>':r.revTrend==='declining'?'<span style="color:#f85149">\u2193 Declining</span>':'<span style="color:#8b949e">\u2192 Flat</span>';
+    revChart=`<div class="dh" style="margin-top:10px">Quarterly Revenue ${{trendLabel}}</div><div class="rev-chart">${{bars}}</div>`;
+  }}
+
+  // Quarterly EPS chart
+  let epsChart='';
+  const eq=r.epsQuarters||[];
+  if(eq.length>=2){{
+    const maxEps=Math.max(...eq.map(q=>Math.abs(q[1])));
+    let bars='';
+    const sorted=[...eq].reverse();
+    sorted.forEach(q=>{{
+      const pct=maxEps>0?Math.round(Math.abs(q[1])/maxEps*100):0;
+      const h=Math.max(pct*36/100,4);
+      const col=q[1]>=0?'#388bfd':'#f85149';
+      bars+=`<div class="rev-bar-col"><div class="rev-val">${{q[1]}}</div><div class="rev-bar" style="height:${{h}}px;background:${{col}}"></div><div class="rev-lbl">${{q[0]}}</div></div>`;
+    }});
+    epsChart=`<div class="dh" style="margin-top:10px">Quarterly EPS</div><div class="rev-chart">${{bars}}</div>`;
+  }}
+
+  // Upcoming events column
+  let evHtml='<div class="ev-none">No upcoming events found</div>';
+  if(r.nextEventLabel){{
+    const hot=r.nextEventLabel.includes('\u26a1');
+    evHtml=`<div class="${{hot?'ev-hot':'ev-soon'}}">${{r.nextEventLabel}}</div>`;
+  }}
+  if(r.nextExDiv){{
+    evHtml+=`<div class="ev-div">\U0001f4b0 Ex-Dividend: ${{r.nextExDiv}}</div>`;
+  }}
+  if(r.nextEarnings){{
+    evHtml+=`<div style="font-size:10px;color:#484f58;margin-top:4px">Date: ${{r.nextEarnings}}</div>`;
+  }}
+
   const fundCol=`
     <div>
-      <div class="dh">Net Revenue Trend &nbsp;${{fpips}}</div>
-      ${{revTrendChip(r.revTrend)}}
-      ${{revBars(r.revQuarters)}}
+      <div class="dh">Fundamentals &nbsp;${{fpips}}</div>
       <table class="mat">
         <tr><td class="mlb">Rev YoY</td><td colspan="2">${{fmtGrowth(rg)}}</td></tr>
         <tr><td class="mlb">EPS Grw</td><td colspan="2">${{fmtGrowth(eg,10,0)}}</td></tr>
       </table>
       <div class="pg2" style="margin-top:8px">${{nmRow}}${{epsRows}}</div>
-    </div>`;
-
-  // ââ Upcoming events column âââââââââââââââââââââââââââââââââââââââââââââ
-  let evHtml='<div class="ev-none">No upcoming events found</div>';
-  const evLines=[];
-  if(r.nextEventLabel){{
-    const hot=r.nextEventLabel.includes('â¡');
-    evLines.push(`<div class="${{hot?'ev-hot':'ev-soon'}}">${{r.nextEventLabel}}</div>`);
-    if(r.nextEarnings){{
-      evLines.push(`<div style="font-size:10px;color:#484f58;margin-top:3px">ð ${{r.nextEarnings}}</div>`);
-    }}
-  }}
-  if(r.nextExDiv){{
-    evLines.push(`<div class="ev-div">ð° Ex-Dividend: ${{r.nextExDiv}}</div>`);
-  }}
-  if(evLines.length){{
-    evHtml=evLines.join('');
-  }}
-
-  const evCol=`
-    <div>
-      <div class="dh">Catalyst &amp; Upcoming Events</div>
+      ${{revChart}}
+      ${{epsChart}}
+      <div class="dh" style="margin-top:12px">Upcoming Events</div>
       ${{evHtml}}
-      <div class="abox" style="margin-top:12px">${{r.analysis}}<div class="aact ${{ac}}">${{at}}</div></div>
     </div>`;
 
   return `<div class="dpanel">
     <div>
-      <div class="dh">SEPA Checklist â ${{r.sepaScore}}/7</div>
+      <div class="dh">SEPA Checklist \u2014 ${{r.sepaScore}}/7</div>
       <div class="cl">${{cr}}</div>
     </div>
     <div>
@@ -401,7 +451,7 @@ function det(r){{
       </div>
     </div>
     ${{fundCol}}
-    ${{evCol}}
+    <div class="abox">${{r.analysis}}<div class="aact ${{ac}}">${{at}}</div></div>
   </div>`;
 }}
 
