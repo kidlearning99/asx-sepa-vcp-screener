@@ -261,8 +261,8 @@ def fetch_stock(ticker):
     time.sleep(1 + random.uniform(0, 1))
 
     try:
-        # Pass the robust session to bypass Yahoo blocks
-        t = yf.Ticker(ticker, session=session)
+        # Removed session=session which caused Yahoo API exception
+        t = yf.Ticker(ticker)
         hist = t.history(period="1y")
         if hist.empty or len(hist) < 60: return None
 
