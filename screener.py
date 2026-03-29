@@ -215,10 +215,10 @@ def _fetch_events(ticker_obj):
                 if -30 <= days <= 180:
                     next_earnings = str(ed)
                     days_to_event = days
-                    if days == 0: next_event_label = "âš¡ RESULTS TODAY"
-                    elif 0 < days <= 7: next_event_label = f"âš¡ Results in {days}d"
-                    elif 0 < days <= 30: next_event_label = f"ðŸ“… Results in {days}d"
-                    elif 0 < days <= 180: next_event_label = f"ðŸ“… Results {ed.strftime('%d %b')}"
+                    if days == 0: next_event_label = "⚡ RESULTS TODAY"
+                    elif 0 < days <= 7: next_event_label = f"⚡ Results in {days}d"
+                    elif 0 < days <= 30: next_event_label = f"📅 Results in {days}d"
+                    elif 0 < days <= 180: next_event_label = f"📅 Results {ed.strftime('%d %b')}"
                     else: next_event_label = f"Results {abs(days)}d ago"
             xd = cal.get('Ex-Dividend Date') or cal.get('exDividendDate')
             if xd:
@@ -233,10 +233,10 @@ def _fetch_events(ticker_obj):
                         if -30 <= days <= 180:
                             next_earnings = str(ed)
                             days_to_event = days
-                            if days == 0: next_event_label = "âš¡ RESULTS TODAY"
-                            elif 0 < days <= 7: next_event_label = f"âš¡ Results in {days}d"
-                            elif 0 < days <= 30: next_event_label = f"ðŸ“… Results in {days}d"
-                            elif 0 < days <= 180: next_event_label = f"ðŸ“… Results {ed.strftime('%d %b')}"
+                            if days == 0: next_event_label = "⚡ RESULTS TODAY"
+                            elif 0 < days <= 7: next_event_label = f"⚡ Results in {days}d"
+                            elif 0 < days <= 30: next_event_label = f"📅 Results in {days}d"
+                            elif 0 < days <= 180: next_event_label = f"📅 Results {ed.strftime('%d %b')}"
                             else: next_event_label = f"Results {abs(days)}d ago"
                     break
     except Exception: pass
@@ -251,7 +251,7 @@ def _fetch_events(ticker_obj):
                         if days <= 180:
                             next_earnings = str(d)
                             days_to_event = days
-                            next_event_label = f"âš¡ Results in {days}d" if days <= 7 else f"ðŸ“… Results in {days}d" if days <= 30 else f"ðŸ“… Results {d.strftime('%d %b')}"
+                            next_event_label = f"⚡ Results in {days}d" if days <= 7 else f"📅 Results in {days}d" if days <= 30 else f"📅 Results {d.strftime('%d %b')}"
                         break
         except Exception: pass
     return next_earnings, next_event_label, next_ex_div, days_to_event
@@ -350,9 +350,9 @@ def fetch_stock(ticker):
         if chg250d > 50: sigs.append(f"+{chg250d}% 12M")
         if vcp >= 3: sigs.append("VCP tightening")
         if pct_hi < 5: sigs.append("Near 52W high")
-        if rev_trend == 'accelerating': sigs.append("â†‘â†‘ Revenue accelerating")
-        elif rev_trend == 'growing': sigs.append("â†‘ Revenue growing")
-        if next_event_label and ('âš¡' in next_event_label or 'ðŸ“…' in next_event_label): sigs.append(next_event_label)
+        if rev_trend == 'accelerating': sigs.append("↑↑ Revenue accelerating")
+        elif rev_trend == 'growing': sigs.append("↑ Revenue growing")
+        if next_event_label and ('⚡' in next_event_label or '📅' in next_event_label): sigs.append(next_event_label)
         if not sigs: sigs.append(f"SEPA {sepa}/7")
 
         tr = "strongly uptrending" if chg250d > 40 else "uptrending" if chg250d > 15 else "recovering"
@@ -363,9 +363,9 @@ def fetch_stock(ticker):
         fund_ctx = ""
         if rev_growth_pct is not None:
             trend_desc = " (accelerating)" if rev_trend == 'accelerating' else " (growing QoQ)" if rev_trend == 'growing' else ""
-            if rev_growth_pct > 20: fund_ctx += f" Net revenue growing strongly +{rev_growth_pct}% YoY{trend_desc} â€” fundamental momentum supports breakout."
+            if rev_growth_pct > 20: fund_ctx += f" Net revenue growing strongly +{rev_growth_pct}% YoY{trend_desc} — fundamental momentum supports breakout."
             elif rev_growth_pct > 5: fund_ctx += f" Net revenue +{rev_growth_pct}% YoY{trend_desc}."
-            elif rev_growth_pct < 0: fund_ctx += f" Net revenue declined {rev_growth_pct}% YoY â€” if monitor fundamentals before entry."
+            elif rev_growth_pct < 0: fund_ctx += f" Net revenue declined {rev_growth_pct}% YoY — if monitor fundamentals before entry."
         if eps_growth_pct is not None and eps_growth_pct > 0: fund_ctx += f" EPS growth +{eps_growth_pct}% confirms expanding profitability."
         elif trailing_eps and trailing_eps > 0: fund_ctx += f" Profitable (trailing EPS ${trailing_eps})."
 
@@ -388,7 +388,7 @@ def fetch_stock(ticker):
             "chg5d": round(chg5d,2), "chg60d": round(chg60d,2), "chg250d": round(chg250d,2),
             "mktcap": int(mktcap), "mktcapFmt": fmt_cap(mktcap), "status": status,
             "checks": {"ma50":c_ma50,"ma150":c_ma150,"ma200":c_ma200,"trend":c_trend,"high":c_high,"low":c_low,"vol":c_vol},
-            "shortSignal": " Â· ".join(sigs[:3]), "analysis": analysis,
+            "shortSignal": " · ".join(sigs[:3]), "analysis": analysis,
             "revGrowth": rev_growth_pct, "revTrend": rev_trend, "revQuarters": rev_quarters,
             "epsGrowth": eps_growth_pct, "epsTrend": eps_trend, "epsQuarters": eps_quarters,
             "netMargin": net_margin_pct, "trailingEps": trailing_eps, "forwardEps": forward_eps, "fundScore": fund_score,
