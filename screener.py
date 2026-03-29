@@ -450,11 +450,10 @@ if __name__ == "__main__":
         with open('index.html', 'w', encoding='utf-8') as f: f.write(html)
         print(f"Dashboard built: {len(html):,} chars")
         publish('index.html')
-        try:
-            os.makedirs('data', exist_ok=True)
-            import json as js
-            with open('data/latest.json', 'w') as f: js.dump({"updated": date.today().isoformat(), "count": len(data)}, f)
-        except Exception as je:
-            print(f"JSON export skipped: {je}")
     except Exception as ex:
-        print(f"Script crashed in the final build/deploy phase: {ex}")
+        import traceback
+        tb = traceback.format_exc()
+        print(f"BUILD FAILED:\n{tb}")
+        fallback = f'<html><body><pre style="padding:20px">Build error ({date.today()}):\n{tb}</pre></body></html>'
+        with open('index.html', 'w', encoding='utf-8') as f: f.write(fallback)
+        print("Wrote fallback index.html for debugging")
