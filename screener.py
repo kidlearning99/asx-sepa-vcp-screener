@@ -2,6 +2,8 @@ import yfinance as yf
 import json, os, time, hashlib, requests, random
 from datetime import date, datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 NETLIFY_TOKEN   = os.environ.get("NETLIFY_TOKEN", "")
 NETLIFY_SITE_ID = os.environ.get("NETLIFY_SITE_ID", "")
@@ -9,6 +11,19 @@ MIN_MARKET_CAP  = 100_000_000
 SEPA_MIN        = 3
 VOL_BREAKOUT    = 1.5
 VCP_MIN         = 2
+
+# Create a robust session to bypass Yahoo Finance Blocks on GitHub Actions
+session = requests.Session()
+retry = Retry(total=5, backoff_factor=2, status_forcelist=[ 429, 500, 502, 503, 504 ])
+adapter = HTTPAdapter(max_retries=retry)
+session.mount("http://", adapter)
+session.mount("https://", adapter)
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+    "Accept": "*/*",
+    "Accept-Encoding": "gzip, deflate",
+    "Connection": "keep-alive"
+})
 
 ASX_TICKERS = [
     "CBA.AX","BHP.AX","RIO.AX","NEM.AX","WBC.AX","NAB.AX","ANZ.AX","WES.AX",
@@ -246,7 +261,8 @@ def fetch_stock(ticker):
     time.sleep(1 + random.uniform(0, 1))
 
     try:
-        t = yf.Ticker(ticker)
+        # Pass the robust session to bypass Yahoo blocks
+        t = yf.Ticker(ticker, session=session)
         hist = t.history(period="1y")
         if hist.empty or len(hist) < 60: return None
 
@@ -396,21 +412,28 @@ def fetch_all():
             if r: results.append(r)
             if done % 10 == 0:
                 print(f"  {done}/{len(ASX_TICKERS)} done, {len(results)} passed")
-            time.sleep(0.5) # Additional pacing loop
     results.sort(key=lambda x: (x['sepaScore'], x['vcpScore']), reverse=True)
     return results
 
 def publish(html_path):
     if not NETLIFY_TOKEN or not NETLIFY_SITE_ID: return
     print("Publishing to Netlify...")
-    with open(html_path, 'rb') as f: content = f.read()
-    sha = hashlib.sha1(content).hexdigest()
-    r = requests.post(f"https://api.netlify.com/api/v1/sites/{NETLIFY_SITE_ID}/deploys", headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/json"}, json={"files": {"/index.html": sha}})
-    deploy = r.json()
-    did = deploy.get("id")
-    if not did: return
-    r2 = requests.put(f"https://api.netlify.com/api/v1/deploys/{did}/files/index.html", headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/octet-stream"}, data=content)
-    if r2.status_code == 200: print(f"Published: {deploy.get('ssl_url') or deploy.get('url')}")
+    try:
+        with open(html_path, 'rb') as f: content = f.read()
+        sha = hashlib.sha1(content).hexdigest()
+        r = requests.post(f"https://api.netlify.com/api/v1/sites/{NETLIFY_SITE_ID}/deploys", headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/json"}, json={"files": {"/index.html": sha}})
+        try:
+            deploy = r.json()
+        except BaseException as e:
+            print(f"Netlify gave non-JSON response. HTTP {r.status_code}. Output: {r.text[:200]}")
+            return
+        did = deploy.get("id")
+        if not did: return
+        r2 = requests.put(f"https://api.netlify.com/api/v1/deploys/{did}/files/index.html", headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/octet-stream"}, data=content)
+        if r2.status_code == 200: print(f"Published: {deploy.get('ssl_url') or deploy.get('url')}")
+        else: print(f"Netlify Upload Failed: {r2.status_code}")
+    except Exception as err:
+        print(f"Deployment failure: {err}")
 
 if __name__ == "__main__":
     print(f"SEPA+VCP ASX Screener - {date.today()}")
@@ -419,12 +442,17 @@ if __name__ == "__main__":
     p = sum(1 for r in data if r['status'] == 'near-pivot')
     w = sum(1 for r in data if r['status'] == 'watch')
     print(f"Results: {len(data)} | Breakouts:{b} | Near Pivot:{p} | Watch:{w}")
-    if not data: exit()
-    import build_dashboard
-    html = build_dashboard.build(data)
-    os.makedirs('data', exist_ok=True)
-    import json as js
-    with open('data/latest.json', 'w') as f: js.dump({"updated": date.today().isoformat(), "data": data}, f)
-    with open('index.html', 'w', encoding='utf-8') as f: f.write(html)
-    print(f"Dashboard built: {len(html):,} chars")
-    publish('index.html')
+    if not data: 
+        print("No stocks passed filters, exiting instead of building an empty report.")
+        exit()
+    try:
+        import build_dashboard
+        html = build_dashboard.build(data)
+        os.makedirs('data', exist_ok=True)
+        import json as js
+        with open('data/latest.json', 'w') as f: js.dump({"updated": date.today().isoformat(), "data": data}, f)
+        with open('index.html', 'w', encoding='utf-8') as f: f.write(html)
+        print(f"Dashboard built: {len(html):,} chars")
+        publish('index.html')
+    except Exception as ex:
+        print(f"Script crashed in the final build/deploy phase: {ex}")
