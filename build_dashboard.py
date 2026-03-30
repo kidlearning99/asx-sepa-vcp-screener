@@ -103,7 +103,7 @@ nav{{background:#010409;border-bottom:1px solid var(--border);padding:12px 28px;
 .hs{{text-align:center}}.hs-n{{font-size:34px;font-weight:800;font-family:'JetBrains Mono'}}.hs-l{{font-size:12px;color:var(--muted);margin-top:2px}}
 .section{{padding:44px 28px;border-bottom:1px solid var(--border)}}
 .stitle{{font-size:22px;font-weight:800;color:#fff;margin-bottom:5px}}.ssub{{font-size:14px;color:var(--muted);margin-bottom:28px}}
-.picks-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10py}}
+.picks-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}}
 .tc{{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s;display:flex;gap:10px}}.tc:hover{{border-color:var(--blue)}}
 .tc-body{{flex:1;min-width:0}}
 .pips,.vpips{{display:flex;gap:2px}}.pip{{width:7px;height:7px;border-radius:1px}}.pg{{background:var(--green)}}.pa{{background:var(--amber)}}.pr{{background:var(--red)}}.po{{background:var(--bg3);border:1px solid var(--border)}}
@@ -123,7 +123,7 @@ tbody td{{padding:9px 11px;vertical-align:middle}}
 .tkr{{font-weight:800;font-size:14px;font-family:'JetBrains Mono';color:#fff}}.co{{font-size:10px;color:var(--muted);margin-top:1px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 .badge{{display:inline-flex;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}}
 .bb{{background:rgba(46,160,67,.15);color:var(--green);border:1px solid rgba(46,160,67,.35)}}.bp{{background:rgba(56,139,253,.15);color:var(--blue);border:1px solid rgba(56,139,253,.35)}}.bw{{background:rgba(210,153,34,.15);color:var(--amber);border:1px solid rgba(210,153,34,.35)}}
-.pv{{font-family:'JetBrains Mono';font-size:13px;font-weight:600}}.gn}{color:var(--green)}}.rd{{color:var(--red)}}.gy{{color:var(--muted)}}
+.pv{{font-family:'JetBrains Mono';font-size:13px;font-weight:600}}.gn{{color:var(--green)}}.rd{{color:var(--red)}}.gy{{color:var(--muted)}}
 .vhigh{{color:var(--green);font-weight:700}}.vmed{{color:var(--amber);font-weight:600}}.vlow{{color:var(--muted)}}
 .pvg{{color:var(--green);font-weight:600}}.pvo{{color:var(--amber)}}.pvw{{color:var(--muted)}}
 .sec{{font-size:10px;color:#8b949e;max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.sig{{font-size:11px;color:#c9d1d9;line-height:1.4;max-width:200px}}.mc{{font-family:'JetBrains Mono';font-size:11px;color:#8b949e}}
@@ -314,7 +314,7 @@ function row(r,i){{
   let revCell='<span style="color:#484f58;font-size:10px">N/A</span>';
   if(r.revGrowth!==null&&r.revGrowth!==undefined){{
     const trendIcons={{'accelerating':'↑↑','growing':'↑','flat':'→','declining':'↓'}};
-    const trendCols={{'accelerating':'#2ea043','growing':'#8bc34a','flat':'%d29922','declining':'#f85149'}};
+    const trendCols={{'accelerating':'#2ea043','growing':'#8bc34a','flat':'#d29922','declining':'#f85149'}};
     const icon=trendIcons[r.revTrend]||'';
     const col=trendCols[r.revTrend]||(r.revGrowth>=0?'#8b949e':'#f85149');
     revCell=`<span style="color:${{col}};font-weight:700;font-size:11px">${{icon}} ${{r.revGrowth>=0?'+':''}}${{r.revGrowth}}%</span>`;
@@ -332,7 +332,7 @@ function row(r,i){{
 
 function det(r){{
   const c=r.checks;
-  const cr=[[c.ma50,`Price ($${{r.price}}) > MA50 ($${{r.ma50}})`],[c.ma150,`MA50 > MA150 ($${{r.ma150}})`],[c.ma200,`MA150 > MA200 ($${{r.ma200}})`],[c.trend,`200-day MA trending up (12M: ${y(r.chg250d>=0?'+':'')+r.chg250d}}%)`],[c.high,`Within 25% of 52W high (${{r.pctFromHigh}}% below)`],[c.low,`25%+ above 52W low (${{r.pctAboveLow}}% above)`],[c.vol,`Volume breakout ≥1.5x (${{r.volRatio}}x) + PVR ${{r.pvr}}`]].map(([ok,l])=>`<div class="cr ${{ok?'ok':'no'}}"><span class="ci">${{ok?'✓':'✗'}}</span>${{l}}</div>`).join('');
+  const cr=[[c.ma50,`Price ($${{r.price}}) > MA50 ($${{r.ma50}})`],[c.ma150,`MA50 > MA150 ($${{r.ma150}})`],[c.ma200,`MA150 > MA200 ($${{r.ma200}})`],[c.trend,`200-day MA trending up (12M: ${{(r.chg250d>=0?'+':'')+r.chg250d}}%)`],[c.high,`Within 25% of 52W high (${{r.pctFromHigh}}% below)`],[c.low,`25%+ above 52W low (${{r.pctAboveLow}}% above)`],[c.vol,`Volume breakout ≥1.5x (${{r.volRatio}}x) + PVR ${{r.pvr}}`]].map(([ok,l])=>`<div class="cr ${{ok?'ok':'no'}}"><span class="ci">${{ok?'✓':'✗'}}</span>${{l}}</div>`).join('');
   const mx=Math.max(r.price,r.ma50,r.ma150,r.ma200);
   const mb=(lb,v,col)=>`<tr><td class="mlb">${{lb}}</td><td class="mbar"><div class="mbw"><div class="mbi" style="width:${{Math.round(v/mx*100)}}%;background:${{col}}"></div></div></td><td class="mvl">$${{v}}</td></tr>`;
   const vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) — VCP forming','Ideal (4/4) — textbook base'][r.vcpScore];
