@@ -32,27 +32,41 @@ jobs:
           NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
+          echo "--- Netlify Deploy Diagnostics ---"
+          echo "Site ID set: $([ -n "$NETLIFY_SITE_ID" ] && echo YES || echo NO)"
+          echo "Token set:   $([ -n "$NETLIFY_TOKEN" ] && echo YES || echo NO)"
           FILE_SHA=$(sha1sum index.html | awk '{print $1}')
           echo "File SHA: $FILE_SHA"
-          DEPLOY=$(curl -sf -X POST \
+
+          echo "--- Creating deploy ---"
+          DEPLOY_RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
             "https://api.netlify.com/api/v1/sites/${NETLIFY_SITE_ID}/deploys" \
             -H "Authorization: Bearer ${NETLIFY_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{\"files\":{\"\/index.html\":\"$FILE_SHA\"}}")
-          echo "Deploy response: $DEPLOY"
-          DEPLOY_ID=$(echo "$DEPLOY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")
-          echo "Deploy ID: $DEPLOY_ID"
-          if [ -n "$DEPLOY_ID" ]; then
-            UPLOAD=$(curl -sf -X PUT \
-              "https://api.netlify.com/api/v1/deploys/${DEPLOY_ID}/files/index.html" \
-              -H "Authorization: Bearer ${NETLIFY_TOKEN}" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary @index.html)
-            echo "Upload result: $UPLOAD"
-            echo "Netlify deploy complete"
-          else
-            echo "ERROR: Could not get deploy ID — check NETLIFY_TOKEN and NETLIFY_SITE_ID secrets"
+          HTTP_STATUS=$(echo "$DEPLOY_RESP" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+          DEPLOY_BODY=$(echo "$DEPLOY_RESP" | sed '/HTTP_STATUS:/d')
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $DEPLOY_BODY"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "ERROR: Deploy creation failed (HTTP $HTTP_STATUS)"
+            echo "Check that NETLIFY_TOKEN and NETLIFY_SITE_ID secrets are set correctly"
+            exit 1
           fi
+
+          DEPLOY_ID=$(echo "$DEPLOY_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+          echo "Deploy ID: $DEPLOY_ID"
+
+          echo "--- Uploading index.html ---"
+          UPLOAD_RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PUT \
+            "https://api.netlify.com/api/v1/deploys/${DEPLOY_ID}/files/index.html" \
+            -H "Authorization: Bearer ${NETLIFY_TOKEN}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @index.html)
+          UPLOAD_STATUS=$(echo "$UPLOAD_RESP" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+          echo "Upload HTTP Status: $UPLOAD_STATUS"
+          [ "$UPLOAD_STATUS" = "200" ] && echo "SUCCESS: Netlify deployed!" || echo "ERROR: Upload failed (HTTP $UPLOAD_STATUS)"
 
       - name: Commit updated index.html
         run: |
