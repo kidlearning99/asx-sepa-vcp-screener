@@ -27,6 +27,33 @@ jobs:
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: python screener.py
 
+      - name: Deploy to Netlify
+        env:
+          NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          FILE_SHA=$(sha1sum index.html | awk '{print $1}')
+          echo "File SHA: $FILE_SHA"
+          DEPLOY=$(curl -sf -X POST \
+            "https://api.netlify.com/api/v1/sites/${NETLIFY_SITE_ID}/deploys" \
+            -H "Authorization: Bearer ${NETLIFY_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"files\":{\"\/index.html\":\"$FILE_SHA\"}}")
+          echo "Deploy response: $DEPLOY"
+          DEPLOY_ID=$(echo "$DEPLOY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")
+          echo "Deploy ID: $DEPLOY_ID"
+          if [ -n "$DEPLOY_ID" ]; then
+            UPLOAD=$(curl -sf -X PUT \
+              "https://api.netlify.com/api/v1/deploys/${DEPLOY_ID}/files/index.html" \
+              -H "Authorization: Bearer ${NETLIFY_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @index.html)
+            echo "Upload result: $UPLOAD"
+            echo "Netlify deploy complete"
+          else
+            echo "ERROR: Could not get deploy ID — check NETLIFY_TOKEN and NETLIFY_SITE_ID secrets"
+          fi
+
       - name: Commit updated index.html
         run: |
           git config user.name "ASX Screener Bot"
