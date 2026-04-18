@@ -1,657 +1,416 @@
-import json, os, hashlib, requests
+"""
+build_dashboard.py — builds the HTML dashboard from screener data
+Called by screener.py
+"""
 from datetime import date
+import json
 
-NETLIFY_TOKEN   = os.environ.get("NETLIFY_TOKEN", "")
-NETLIFY_SITE_ID = os.environ.get("NETLIFY_SITE_ID", "")
 
-def fmt_cap(c):
-    if not c: return "—"
-    if c >= 1e12: return f"${c/1e12:.1f}T"
-    if c >= 1e9:  return f"${c/1e9:.1f}B"
-    if c >= 1e6:  return f"${c/1e6:.0f}M"
-    return f"${c:.0f}"
+def fmt_pct(v):
+    return ("+" if v >= 0 else "") + str(round(v, 2)) + "%"
 
-def pct_color(v):
-    if v is None: return "#888"
-    return "#22c55e" if v >= 0 else "#ef4444"
 
-def val_or(v, fallback="—"):
-    if v is None: return fallback
-    return v
+def build(data, source="Yahoo Finance (live)"):
+    today_str = date.today().strftime("%d %b %Y")
+    def _jsafe(o):
+        if hasattr(o, 'item'): return o.item()
+        if hasattr(o, '__float__'): return float(o)
+        raise TypeError(repr(o))
+    json_data  = json.dumps(data, default=_jsafe)
 
-def build(data):
-    today = str(date.today())
-    breakouts  = [r for r in data if r.get('status') == 'Breakout']
-    near_pivot = [r for r in data if r.get('status') == 'NearPivot']
-    watch      = [r for r in data if r.get('status') == 'Watch']
+    n          = len(data)
+    breakouts  = [r for r in data if r["status"] == "breakout"]
+    pivots     = [r for r in data if r["status"] == "near-pivot"]
+    watching   = [r for r in data if r["status"] == "watch"]
+    sectors    = sorted(set(r["sector"] for r in data if r["sector"]))
+    sector_opts = "".join(f'<option value="{s}">{s}</option>' for s in sectors)
 
-    # sort by sepa desc then vcp desc
-    def sort_key(r): return (r.get('sepa',0), r.get('vcp',0), r.get('volr',0))
-    breakouts  = sorted(breakouts,  key=sort_key, reverse=True)
-    near_pivot = sorted(near_pivot, key=sort_key, reverse=True)
-    watch      = sorted(watch,      key=sort_key, reverse=True)
+    top = sorted(
+        breakouts + [r for r in pivots if r["sepaScore"] >= 5],
+        key=lambda x: (x["sepaScore"], x["vcpScore"], x["volRatio"]),
+        reverse=True
+    )[:10]
 
-    all_sectors = sorted(set(r.get('sector') or 'Unknown' for r in data))
+    medals   = ["🥇","🥈","🥉","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
+    top_html = ""
+    for i, r in enumerate(top):
+        sc    = r["sepaScore"]
+        pips  = "".join(f'<div class="pip {"pg" if j<sc else "po"}"></div>' for j in range(7))
+        vpips = "".join(f'<div class="vp {"von" if j<r["vcpScore"] else "voff"}"></div>' for j in range(4))
+        col   = "#2ea043" if r["status"] == "breakout" else "#388bfd"
+        p250c = "#2ea043" if r["chg250d"] >= 0 else "#f85149"
+        badge_bg    = "46,160,67" if r["status"] == "breakout" else "56,139,253"
+        badge_label = "BREAKOUT"  if r["status"] == "breakout" else "NEAR PIVOT"
 
-    def check(v):
-        return '<span class="ck ok">✓</span>' if v else '<span class="ck no">✗</span>'
+        # event + revenue badge for top-picks card
+        ev_html = ""
+        nl = r.get("nextEventLabel")
+        if nl:
+            ev_col = "#f0e040" if "⚡" in nl else "#388bfd"
+            ev_bg  = "rgba(240,224,64,.1)" if "⚡" in nl else "rgba(56,139,253,.1)"
+            ev_bd  = "rgba(240,224,64,.3)" if "⚡" in nl else "rgba(56,139,253,.3)"
+            ev_html += (f'<div style="margin-top:5px;font-size:10px;font-weight:700;'
+                       f'color:{ev_col};background:{ev_bg};border:1px solid {ev_bd};'
+                       f'border-radius:4px;padding:2px 6px;display:inline-block">{nl}</div>')
+        rt = r.get("revTrend")
+        if rt in ("accelerating", "growing"):
+            rt_col = "#2ea043" if rt == "accelerating" else "#8bc34a"
+            rt_lbl = "↑↑ Rev Accelerating" if rt == "accelerating" else "↑ Rev Growing"
+            ev_html += (f'<div style="margin-top:4px;font-size:10px;font-weight:700;'
+                       f'color:{rt_col};background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2);'
+                       f'border-radius:4px;padding:2px 6px;display:inline-block">{rt_lbl}</div>')
 
-    def pct_badge(v, label=""):
-        if v is None: return f'<span class="badge grey">{label}—</span>'
-        cls = "green" if v >= 0 else "red"
-        return f'<span class="badge {cls}">{label}{v:+.1f}%</span>'
-
-    def vol_bar(buy, sell):
-        b = buy or 50
-        s = sell or 50
-        return f'''<div class="vol-bar-wrap" title="Buy {b}% / Sell {s}%">
-          <div class="vol-bar-buy" style="width:{b}%"></div>
-          <div class="vol-bar-sell" style="width:{s}%"></div>
-        </div>
-        <div class="vol-bar-labels"><span class="buy-lbl">Buy {b}%</span><span class="sell-lbl">Sell {s}%</span></div>'''
-
-    def rsi_gauge(rsi):
-        if rsi is None: return '<span class="dim">—</span>'
-        cls = "overbought" if rsi > 70 else ("oversold" if rsi < 30 else "neutral")
-        pct = min(max(rsi, 0), 100)
-        return f'<div class="rsi-wrap"><div class="rsi-bar {cls}" style="width:{pct}%"></div><span class="rsi-val">{rsi}</span></div>'
-
-    def bb_indicator(pos):
-        if pos is None: return '<span class="dim">—</span>'
-        cls = "bb-high" if pos > 80 else ("bb-low" if pos < 20 else "bb-mid")
-        return f'<div class="bb-wrap"><div class="bb-fill {cls}" style="width:{min(pos,100):.0f}%"></div><span class="bb-val">{pos:.0f}%</span></div>'
-
-    def metric_cell(label, value, suffix="", color=None, bold=False):
-        style = f' style="color:{color}"' if color else ""
-        bstart = "<b>" if bold else ""
-        bend   = "</b>" if bold else ""
-        val_str = f"{bstart}{value}{suffix}{bend}" if value not in (None, "—") else "—"
-        return f'<div class="metric"><span class="metric-lbl">{label}</span><span class="metric-val"{style}>{val_str}</span></div>'
-
-    def render_card(r):
-        ticker  = r.get('ticker','')
-        name    = r.get('name', ticker.replace('.AX',''))
-        price   = r.get('price', 0)
-        status  = r.get('status','')
-        sepa    = r.get('sepa', 0)
-        vcp     = r.get('vcp', 0)
-        sector  = r.get('sector') or '—'
-        mktcap  = r.get('mktcapFmt','—')
-        chg1d   = r.get('chg1d')
-        chg5d   = r.get('chg5d')
-        chg20d  = r.get('chg20d')
-        chg60d  = r.get('chg60d')
-        chg250d = r.get('chg250d')
-        volr    = r.get('volr', 1)
-        vol_today = r.get('volume', 0)
-        vol_avg20 = r.get('volAvg20', 0)
-        dollar_vol = r.get('dollarVol')
-        vol_trend  = r.get('volTrend')
-        buy_pct    = r.get('buyPct', 50)
-        sell_pct   = r.get('sellPct', 50)
-        rsi        = r.get('rsi')
-        atr_pct    = r.get('atrPct')
-        bb_pos     = r.get('bbPos')
-        bb_bw      = r.get('bbBw')
-        pct_from_hi= r.get('pctFromHi')
-        pct_from_lo= r.get('pctFromLo')
-        hi52       = r.get('hi52')
-        lo52       = r.get('lo52')
-        ma50       = r.get('ma50')
-        ma150      = r.get('ma150')
-        ma200      = r.get('ma200')
-        near_pivot = r.get('nearPivot', False)
-        recent_hi  = r.get('recentHi')
-        checks     = r.get('checks', {})
-        analysis   = r.get('analysis','')
-        short_sig  = r.get('shortSignal','')
-        # Fundamentals
-        pe         = r.get('peRatio')
-        pb         = r.get('pbRatio')
-        ps         = r.get('psRatio')
-        peg        = r.get('pegRatio')
-        roe        = r.get('roe')
-        roa        = r.get('roa')
-        de         = r.get('debtEquity')
-        cur_r      = r.get('currentRatio')
-        div_y      = r.get('divYield')
-        div_r      = r.get('divRate')
-        payout     = r.get('payoutRatio')
-        fcf        = r.get('fcf')
-        beta       = r.get('beta')
-        short_rt   = r.get('shortRatio')
-        pm         = r.get('profitMargin')
-        gm         = r.get('grossMargin')
-        om         = r.get('operatingMargin')
-        rev_g      = r.get('revGrowth')
-        eps_g      = r.get('epsGrowth')
-        t_eps      = r.get('trailingEps')
-        f_eps      = r.get('forwardEps')
-        fund_score = r.get('fundScore', 0)
-        # Events
-        next_earn  = r.get('nextEarnings')
-        next_label = r.get('nextEventLabel','')
-        next_div   = r.get('nextExDiv')
-        days_ev    = r.get('daysToEvent', 9999)
-
-        status_cls = {'Breakout':'status-break','NearPivot':'status-near','Watch':'status-watch'}.get(status,'')
-        status_icon = {'Breakout':'🔥','NearPivot':'👀','Watch':'📋'}.get(status,'')
-
-        chg1d_col  = pct_color(chg1d)
-        chg5d_col  = pct_color(chg5d)
-        chg250d_col= pct_color(chg250d)
-
-        event_html = ""
-        if next_label and days_ev < 30:
-            urgency = "event-urgent" if days_ev <= 7 else ("event-soon" if days_ev <= 14 else "event-upcoming")
-            event_html = f'<div class="event-badge {urgency}">📅 {next_label}</div>'
-        elif next_earn:
-            event_html = f'<div class="event-badge event-upcoming">📅 Earnings {next_earn}</div>'
-
-        if next_div:
-            event_html += f'<div class="event-badge event-div">💰 Ex-Div {next_div}</div>'
-
-        sepa_checks_html = "".join([
-            f'<span class="sepa-check {"on" if checks.get(k) else "off"}" title="{lbl}">{abbr}</span>'
-            for k, abbr, lbl in [
-                ('ma50','50','Above MA50'),('ma150','150','Above MA150'),('ma200','200','Above MA200'),
-                ('trend','T↑','MA50>150>200'),('trend200','200↑','MA200 rising'),
-                ('high','52H','Within 25% of 52W high'),('low','52L','25%+ above 52W low')
-            ]
-        ])
-
-        vol_trend_html = ""
-        if vol_trend is not None:
-            vt_col = "#22c55e" if vol_trend > 10 else ("#ef4444" if vol_trend < -10 else "#f59e0b")
-            vol_trend_html = f'<span style="color:{vt_col};font-size:11px">5d avg {vol_trend:+.0f}%</span>'
-
-        return f'''
-<div class="card {status_cls}" data-ticker="{ticker}" data-sepa="{sepa}" data-vcp="{vcp}"
-     data-sector="{sector}" data-mktcap="{r.get("mktcap",0)}" data-status="{status}"
-     data-rsi="{rsi or 0}" data-vol="{volr}">
-  <div class="card-header">
-    <div class="card-title-row">
-      <span class="ticker-name">{ticker.replace(".AX","")}</span>
-      <span class="company-name">{name}</span>
-      <span class="status-pill {status_cls}">{status_icon} {status}</span>
-    </div>
-    <div class="card-meta">
-      <span class="sector-tag">{sector}</span>
-      <span class="mktcap-tag">{mktcap}</span>
-      {event_html}
-    </div>
+        top_html += f'''<div class="tc" onclick="jmp('{r["ticker"]}')" >
+<span style="font-size:20px;flex-shrink:0">{medals[i]}</span>
+<div class="tc-body">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+    <span style="font-weight:800;font-size:15px;font-family:monospace;color:#fff">{r["ticker"]}</span>
+    <span style="padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;background:rgba({badge_bg},.15);color:{col};border:1px solid rgba({badge_bg},.35)">{badge_label}</span>
   </div>
-
-  <div class="price-row">
-    <span class="price-big">${price:.3f}</span>
-    <span class="chg-badge" style="color:{chg1d_col}">{f"{chg1d:+.2f}%" if chg1d is not None else "—"}</span>
-    <div class="score-pills">
-      <span class="score-pill sepa-pill" title="SEPA Score">SEPA {sepa}/7</span>
-      <span class="score-pill vcp-pill" title="VCP Score">VCP {vcp}/4</span>
-      <span class="score-pill fund-pill" title="Fundamental Score">F {fund_score}/3</span>
-    </div>
+  <div style="font-size:11px;color:#7d8590;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{r["name"]}</div>
+  <div style="display:flex;gap:6px;margin-bottom:6px"><div class="pips">{pips}</div><div class="vpips">{vpips}</div></div>
+  <div style="display:flex;gap:10px;font-size:11px;font-family:monospace;flex-wrap:wrap">
+    <span style="color:#fff;font-weight:700">${r["price"]}</span>
+    <span style="color:{p250c}">{fmt_pct(r["chg250d"])} 12M</span>
+    <span style="color:{"#2ea043" if r["volRatio"]>=1.5 else "#d29922"}">{r["volRatio"]}x vol</span>
   </div>
-
-  <!-- SEPA Checks -->
-  <div class="sepa-checks-row">{sepa_checks_html}</div>
-
-  <!-- Tab Navigation -->
-  <div class="tab-nav">
-    <button class="tab-btn active" onclick="switchTab(this,'price')">📈 Price</button>
-    <button class="tab-btn" onclick="switchTab(this,'volume')">📊 Volume</button>
-    <button class="tab-btn" onclick="switchTab(this,'technical')">🔬 Technical</button>
-    <button class="tab-btn" onclick="switchTab(this,'fundamental')">💼 Fundamental</button>
-    <button class="tab-btn" onclick="switchTab(this,'catalyst')">🎯 Catalyst</button>
-  </div>
-
-  <!-- Price Tab -->
-  <div class="tab-panel active" data-tab="price">
-    <div class="metrics-grid">
-      {metric_cell("1 Day",  f'{chg1d:+.2f}%'  if chg1d  is not None else "—", color=pct_color(chg1d))}
-      {metric_cell("5 Day",  f'{chg5d:+.2f}%'  if chg5d  is not None else "—", color=pct_color(chg5d))}
-      {metric_cell("20 Day", f'{chg20d:+.2f}%' if chg20d is not None else "—", color=pct_color(chg20d))}
-      {metric_cell("60 Day", f'{chg60d:+.2f}%' if chg60d is not None else "—", color=pct_color(chg60d))}
-      {metric_cell("1 Year", f'{chg250d:+.2f}%' if chg250d is not None else "—", color=pct_color(chg250d))}
-      {metric_cell("52W High", f'${hi52:.3f}' if hi52 else "—")}
-      {metric_cell("52W Low",  f'${lo52:.3f}'  if lo52  else "—")}
-      {metric_cell("From High", f'{pct_from_hi:+.1f}%' if pct_from_hi is not None else "—", color=pct_color(pct_from_hi))}
-      {metric_cell("From Low",  f'{pct_from_lo:+.1f}%' if pct_from_lo is not None else "—", color=pct_color(pct_from_lo))}
-      {metric_cell("MA 50",  f'${ma50:.3f}'  if ma50  else "—", color="#22c55e" if price > (ma50 or 0) else "#ef4444")}
-      {metric_cell("MA 150", f'${ma150:.3f}' if ma150 else "—", color="#22c55e" if price > (ma150 or 0) else "#ef4444")}
-      {metric_cell("MA 200", f'${ma200:.3f}' if ma200 else "—", color="#22c55e" if price > (ma200 or 0) else "#ef4444")}
-    </div>
-    {f'<div class="pivot-note">📍 Near Pivot: ${recent_hi:.3f}</div>' if near_pivot and recent_hi else ""}
-    {f'<div class="analysis-text">{analysis}</div>' if analysis else ""}
-  </div>
-
-  <!-- Volume Tab -->
-  <div class="tab-panel" data-tab="volume">
-    <div class="metrics-grid">
-      {metric_cell("Today Vol", f'{vol_today:,.0f}' if vol_today else "—")}
-      {metric_cell("20D Avg Vol", f'{vol_avg20:,.0f}' if vol_avg20 else "—")}
-      {metric_cell("Vol Ratio", f'{volr:.2f}x', color="#22c55e" if volr >= 1.5 else ("#f59e0b" if volr >= 1.0 else "#ef4444"))}
-      {metric_cell("Dollar Vol", f'${dollar_vol:.1f}M' if dollar_vol else "—")}
-      {metric_cell("Vol Trend 5D", f'{vol_trend:+.1f}%' if vol_trend is not None else "—", color=pct_color(vol_trend))}
-    </div>
-    <div class="vol-section">
-      <div class="vol-label">Buy / Sell Pressure (10-day estimate)</div>
-      {vol_bar(buy_pct, sell_pct)}
-    </div>
-    <div class="vol-note">
-      Volume ratio ≥ 1.5x flags a breakout. Buy/sell split estimated from price action (close vs open per bar).
-    </div>
-  </div>
-
-  <!-- Technical Tab -->
-  <div class="tab-panel" data-tab="technical">
-    <div class="metrics-grid">
-      {metric_cell("RSI (14)", str(rsi) if rsi else "—", color="#ef4444" if (rsi or 0) > 70 else ("#22c55e" if (rsi or 0) < 30 else "#888"))}
-      {metric_cell("ATR %", f'{atr_pct:.2f}%' if atr_pct else "—")}
-      {metric_cell("BB Width", f'{bb_bw:.1f}%' if bb_bw else "—")}
-      {metric_cell("BB Position", f'{bb_pos:.0f}%' if bb_pos else "—", color="#ef4444" if (bb_pos or 0) > 80 else ("#22c55e" if (bb_pos or 0) < 20 else "#888"))}
-      {metric_cell("Beta", str(beta) if beta else "—")}
-      {metric_cell("Short Ratio", str(short_rt) if short_rt else "—")}
-    </div>
-    <div class="rsi-section">
-      <div class="indicator-label">RSI (14)</div>
-      {rsi_gauge(rsi)}
-    </div>
-    <div class="bb-section">
-      <div class="indicator-label">Bollinger Band Position</div>
-      {bb_indicator(bb_pos)}
-    </div>
-  </div>
-
-  <!-- Fundamental Tab -->
-  <div class="tab-panel" data-tab="fundamental">
-    <div class="fund-grid">
-      <div class="fund-section">
-        <div class="fund-section-title">Valuation</div>
-        {metric_cell("P/E Ratio", str(pe) if pe else "—")}
-        {metric_cell("P/B Ratio", str(pb) if pb else "—")}
-        {metric_cell("P/S Ratio", str(ps) if ps else "—")}
-        {metric_cell("PEG Ratio", str(peg) if peg else "—")}
-        {metric_cell("Trailing EPS", f'${t_eps:.3f}' if t_eps else "—")}
-        {metric_cell("Forward EPS", f'${f_eps:.3f}' if f_eps else "—")}
-      </div>
-      <div class="fund-section">
-        <div class="fund-section-title">Growth</div>
-        {metric_cell("Revenue Growth", f'{rev_g:+.1f}%' if rev_g is not None else "—", color=pct_color(rev_g))}
-        {metric_cell("EPS Growth", f'{eps_g:+.1f}%' if eps_g is not None else "—", color=pct_color(eps_g))}
-        {metric_cell("Gross Margin", f'{gm:.1f}%' if gm else "—")}
-        {metric_cell("Operating Margin", f'{om:.1f}%' if om else "—")}
-        {metric_cell("Net Margin", f'{pm:.1f}%' if pm else "—", color=pct_color(pm))}
-        {metric_cell("Free Cash Flow", f'${fcf:.0f}M' if fcf else "—")}
-      </div>
-      <div class="fund-section">
-        <div class="fund-section-title">Balance Sheet</div>
-        {metric_cell("ROE", f'{roe:.1f}%' if roe else "—", color=pct_color(roe))}
-        {metric_cell("ROA", f'{roa:.1f}%' if roa else "—", color=pct_color(roa))}
-        {metric_cell("Debt/Equity", str(de) if de else "—", color="#ef4444" if (de or 0) > 2 else "#22c55e")}
-        {metric_cell("Current Ratio", str(cur_r) if cur_r else "—", color="#22c55e" if (cur_r or 0) > 1.5 else "#f59e0b")}
-        {metric_cell("Dividend Yield", f'{div_y:.1f}%' if div_y else "—")}
-        {metric_cell("Payout Ratio", f'{payout:.0f}%' if payout else "—")}
-      </div>
-    </div>
-  </div>
-
-  <!-- Catalyst Tab -->
-  <div class="tab-panel" data-tab="catalyst">
-    <div class="catalyst-grid">
-      <div class="catalyst-item">
-        <div class="catalyst-label">📊 Next Earnings</div>
-        <div class="catalyst-value">{next_earn or "Not scheduled"}</div>
-        {f'<div class="catalyst-countdown {"urgent" if days_ev <= 7 else "soon"}">{days_ev} days away</div>' if next_earn and days_ev < 365 else ""}
-      </div>
-      <div class="catalyst-item">
-        <div class="catalyst-label">💰 Ex-Dividend Date</div>
-        <div class="catalyst-value">{next_div or "—"}</div>
-        {f'<div class="catalyst-div-rate">Rate: ${div_r:.3f} | Yield: {div_y:.1f}%</div>' if div_r and div_y else ""}
-      </div>
-      <div class="catalyst-item">
-        <div class="catalyst-label">📈 Revenue Trend</div>
-        <div class="catalyst-value" style="color:{pct_color(rev_g)}">{f"{rev_g:+.1f}% YoY" if rev_g is not None else "—"}</div>
-      </div>
-      <div class="catalyst-item">
-        <div class="catalyst-label">💵 EPS Trend</div>
-        <div class="catalyst-value" style="color:{pct_color(eps_g)}">{f"{eps_g:+.1f}% YoY" if eps_g is not None else "—"}</div>
-      </div>
-    </div>
-    {f'<div class="short-signal-row">🔔 {short_sig}</div>' if short_sig else ""}
-  </div>
+  <div style="font-size:11px;color:#7d8590;margin-top:5px;line-height:1.4">{r["shortSignal"]}</div>
+  {ev_html}
+</div>
 </div>'''
 
-    # ── Build cards HTML ──────────────────────────────────────────────────────
-    def section_html(title, icon, stocks, css_id):
-        if not stocks:
-            return f'<section id="{css_id}"><h2>{icon} {title} <span class="count">0</span></h2><p class="empty-msg">No stocks in this category today.</p></section>'
-        cards = "\n".join(render_card(r) for r in stocks)
-        return f'<section id="{css_id}"><h2>{icon} {title} <span class="count">{len(stocks)}</span></h2><div class="card-grid">{cards}</div></section>'
-
-    breakout_html  = section_html("Breakouts", "🔥", breakouts, "breakouts")
-    nearpivot_html = section_html("Near Pivot", "👀", near_pivot, "nearpivot")
-    watch_html     = section_html("Watch List", "📋", watch, "watchlist")
-
-    sector_options = "\n".join(f'<option value="{s}">{s}</option>' for s in all_sectors)
-
-    total = len(data)
-    html = f'''<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ASX SEPA+VCP Screener — {today}</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SEPA+VCP ASX Screener — {today_str}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root {{
-  --bg: #0f1117; --bg2: #1a1d27; --bg3: #22263a;
-  --border: #2e3250; --text: #e2e8f0; --dim: #64748b;
-  --green: #22c55e; --red: #ef4444; --yellow: #f59e0b;
-  --blue: #3b82f6; --purple: #8b5cf6; --teal: #14b8a6;
-  --break: #ef4444; --near: #f59e0b; --watch: #3b82f6;
-}}
-* {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{ background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; }}
-
-/* ── Header ── */
-.header {{ background: var(--bg2); border-bottom: 1px solid var(--border); padding: 16px 20px; position: sticky; top: 0; z-index: 100; }}
-.header-top {{ display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }}
-.logo {{ font-size: 18px; font-weight: 700; color: var(--text); }}
-.logo span {{ color: var(--blue); }}
-.updated {{ color: var(--dim); font-size: 11px; }}
-.summary-pills {{ display: flex; gap: 8px; flex-wrap: wrap; }}
-.summary-pill {{ padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }}
-.pill-total  {{ background: #1e293b; border: 1px solid var(--border); }}
-.pill-break  {{ background: rgba(239,68,68,.15); border: 1px solid var(--break); color: var(--break); }}
-.pill-near   {{ background: rgba(245,158,11,.15); border: 1px solid var(--near); color: var(--near); }}
-.pill-watch  {{ background: rgba(59,130,246,.15); border: 1px solid var(--watch); color: var(--watch); }}
-
-/* ── Filters ── */
-.filters {{ background: var(--bg2); border-bottom: 1px solid var(--border); padding: 10px 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }}
-.filter-group {{ display: flex; align-items: center; gap: 6px; }}
-.filter-group label {{ color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }}
-select, input[type=range] {{ background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer; }}
-.sort-btn {{ background: var(--bg3); border: 1px solid var(--border); color: var(--dim); padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; }}
-.sort-btn.active {{ border-color: var(--blue); color: var(--blue); }}
-.filter-search {{ background: var(--bg3); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 10px; font-size: 12px; width: 160px; }}
-.filter-search::placeholder {{ color: var(--dim); }}
-
-/* ── Main layout ── */
-main {{ max-width: 1600px; margin: 0 auto; padding: 20px; }}
-section {{ margin-bottom: 32px; }}
-section h2 {{ font-size: 16px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }}
-.count {{ background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 2px 8px; font-size: 11px; color: var(--dim); }}
-.empty-msg {{ color: var(--dim); font-style: italic; padding: 20px 0; }}
-.card-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }}
-
-/* ── Cards ── */
-.card {{ background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; transition: transform .15s, box-shadow .15s; }}
-.card:hover {{ transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.4); }}
-.card.status-break {{ border-left: 3px solid var(--break); }}
-.card.status-near  {{ border-left: 3px solid var(--near); }}
-.card.status-watch {{ border-left: 3px solid var(--watch); }}
-
-.card-header {{ padding: 12px 14px 8px; }}
-.card-title-row {{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }}
-.ticker-name {{ font-size: 16px; font-weight: 800; color: var(--text); }}
-.company-name {{ font-size: 11px; color: var(--dim); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-.status-pill {{ font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }}
-.status-pill.status-break {{ background: rgba(239,68,68,.15); color: var(--break); border: 1px solid var(--break); }}
-.status-pill.status-near  {{ background: rgba(245,158,11,.15); color: var(--near);  border: 1px solid var(--near); }}
-.status-pill.status-watch {{ background: rgba(59,130,246,.15);  color: var(--watch); border: 1px solid var(--watch); }}
-.card-meta {{ display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }}
-.sector-tag, .mktcap-tag {{ background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-size: 10px; color: var(--dim); }}
-
-/* Event badges */
-.event-badge {{ font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 6px; }}
-.event-urgent   {{ background: rgba(239,68,68,.2);  color: var(--break); border: 1px solid var(--break); }}
-.event-soon     {{ background: rgba(245,158,11,.2); color: var(--yellow); border: 1px solid var(--yellow); }}
-.event-upcoming {{ background: rgba(59,130,246,.2); color: var(--blue);  border: 1px solid var(--blue); }}
-.event-div      {{ background: rgba(34,197,94,.2);  color: var(--green); border: 1px solid var(--green); }}
-
-.price-row {{ display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--bg3); }}
-.price-big {{ font-size: 20px; font-weight: 800; }}
-.chg-badge {{ font-size: 13px; font-weight: 600; }}
-.score-pills {{ display: flex; gap: 5px; margin-left: auto; }}
-.score-pill {{ font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px; }}
-.sepa-pill {{ background: rgba(139,92,246,.2); color: var(--purple); border: 1px solid var(--purple); }}
-.vcp-pill  {{ background: rgba(20,184,166,.2);  color: var(--teal);   border: 1px solid var(--teal); }}
-.fund-pill {{ background: rgba(34,197,94,.2);   color: var(--green);  border: 1px solid var(--green); }}
-
-/* SEPA check row */
-.sepa-checks-row {{ padding: 6px 14px; display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }}
-.sepa-check {{ font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; cursor: help; }}
-.sepa-check.on  {{ background: rgba(34,197,94,.2);  color: var(--green); border: 1px solid rgba(34,197,94,.3); }}
-.sepa-check.off {{ background: rgba(100,116,139,.1); color: var(--dim);  border: 1px solid var(--border); }}
-
-/* Tabs */
-.tab-nav {{ display: flex; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }}
-.tab-nav::-webkit-scrollbar {{ display: none; }}
-.tab-btn {{ background: none; border: none; color: var(--dim); font-size: 11px; font-weight: 600; padding: 4px 10px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; transition: color .15s; }}
-.tab-btn.active {{ color: var(--blue); border-bottom-color: var(--blue); }}
-.tab-btn:hover {{ color: var(--text); }}
-
-.tab-panel {{ display: none; padding: 12px 14px; }}
-.tab-panel.active {{ display: block; }}
-
-/* Metrics grid */
-.metrics-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }}
-.metric {{ background: var(--bg3); border-radius: 6px; padding: 6px 8px; }}
-.metric-lbl {{ font-size: 10px; color: var(--dim); display: block; margin-bottom: 2px; }}
-.metric-val {{ font-size: 12px; font-weight: 600; }}
-
-.pivot-note {{ margin-top: 8px; font-size: 11px; color: var(--yellow); background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); border-radius: 6px; padding: 4px 8px; }}
-.analysis-text {{ margin-top: 8px; font-size: 11px; color: var(--dim); line-height: 1.5; }}
-
-/* Volume tab */
-.vol-section {{ margin-top: 10px; }}
-.vol-label {{ font-size: 11px; color: var(--dim); margin-bottom: 5px; }}
-.vol-bar-wrap {{ height: 12px; border-radius: 6px; overflow: hidden; display: flex; }}
-.vol-bar-buy  {{ background: var(--green); height: 100%; }}
-.vol-bar-sell {{ background: var(--red);   height: 100%; }}
-.vol-bar-labels {{ display: flex; justify-content: space-between; margin-top: 3px; }}
-.buy-lbl  {{ font-size: 10px; font-weight: 600; color: var(--green); }}
-.sell-lbl {{ font-size: 10px; font-weight: 600; color: var(--red); }}
-.vol-note {{ margin-top: 10px; font-size: 10px; color: var(--dim); font-style: italic; }}
-
-/* RSI gauge */
-.rsi-section, .bb-section {{ margin-top: 10px; }}
-.indicator-label {{ font-size: 10px; color: var(--dim); margin-bottom: 4px; }}
-.rsi-wrap {{ background: var(--bg3); border-radius: 6px; height: 14px; position: relative; overflow: hidden; }}
-.rsi-bar {{ height: 100%; border-radius: 6px; transition: width .3s; }}
-.rsi-bar.overbought {{ background: var(--red); }}
-.rsi-bar.oversold   {{ background: var(--green); }}
-.rsi-bar.neutral    {{ background: var(--blue); }}
-.rsi-val {{ position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 10px; font-weight: 700; }}
-.bb-wrap {{ background: var(--bg3); border-radius: 6px; height: 14px; position: relative; overflow: hidden; }}
-.bb-fill {{ height: 100%; border-radius: 6px; }}
-.bb-fill.bb-high {{ background: var(--red); }}
-.bb-fill.bb-low  {{ background: var(--green); }}
-.bb-fill.bb-mid  {{ background: var(--blue); }}
-.bb-val {{ position: absolute; right: 6px; top: 50%; transform: translateY(-50%); font-size: 10px; font-weight: 700; }}
-
-/* Fundamentals */
-.fund-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }}
-.fund-section {{ }}
-.fund-section-title {{ font-size: 11px; font-weight: 700; color: var(--blue); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }}
-
-/* Catalyst */
-.catalyst-grid {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }}
-.catalyst-item {{ background: var(--bg3); border-radius: 8px; padding: 10px; }}
-.catalyst-label {{ font-size: 10px; color: var(--dim); margin-bottom: 4px; }}
-.catalyst-value {{ font-size: 13px; font-weight: 600; }}
-.catalyst-countdown {{ margin-top: 3px; font-size: 10px; font-weight: 700; }}
-.catalyst-countdown.urgent {{ color: var(--break); }}
-.catalyst-countdown.soon   {{ color: var(--yellow); }}
-.catalyst-div-rate {{ margin-top: 3px; font-size: 10px; color: var(--dim); }}
-.short-signal-row {{ margin-top: 10px; font-size: 11px; color: var(--yellow); background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.2); border-radius: 6px; padding: 6px 10px; }}
-
-.dim {{ color: var(--dim); }}
-
-@media (max-width: 600px) {{
-  .fund-grid {{ grid-template-columns: 1fr; }}
-  .catalyst-grid {{ grid-template-columns: 1fr; }}
-  .metrics-grid {{ grid-template-columns: repeat(2, 1fr); }}
-}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+:root{{--bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--border:#30363d;--b2:#1c2128;--text:#e6edf3;--muted:#7d8590;--green:#2ea043;--blue:#388bfd;--amber:#d29922;--red:#f85149;--gold:#f0e040}}
+body{{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px}}
+nav{{background:#010409;border-bottom:1px solid var(--border);padding:12px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;gap:12px;flex-wrap:wrap}}
+.nlogo{{font-weight:800;font-size:15px;color:#fff;display:flex;align-items:center;gap:8px}}
+.ndot{{width:9px;height:9px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}}
+@keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:.35}}}}
+.nlinks{{display:flex;gap:20px}}.nlinks a{{color:var(--muted);font-size:12px;text-decoration:none}}.nlinks a:hover{{color:var(--text)}}
+.nbadge{{background:rgba(46,160,67,.12);color:var(--green);border:1px solid rgba(46,160,67,.3);border-radius:20px;padding:3px 11px;font-size:11px;font-weight:600;white-space:nowrap}}
+.hero{{background:linear-gradient(180deg,#010409,var(--bg));padding:56px 28px 40px;text-align:center;border-bottom:1px solid var(--border)}}
+.hero h1{{font-size:38px;font-weight:800;color:#fff;letter-spacing:-1px;line-height:1.1}}
+.hero h1 span{{background:linear-gradient(90deg,var(--green),var(--blue));-webkit-background-clip:text;-webkit-text-fill-color:transparent}}
+.hero p{{font-size:15px;color:var(--muted);margin:12px auto 0;max-width:580px;line-height:1.7}}
+.hero-stats{{display:flex;justify-content:center;gap:36px;margin-top:30px;flex-wrap:wrap}}
+.hs{{text-align:center}}.hs-n{{font-size:34px;font-weight:800;font-family:'JetBrains Mono'}}.hs-l{{font-size:12px;color:var(--muted);margin-top:2px}}
+.section{{padding:44px 28px;border-bottom:1px solid var(--border)}}
+.stitle{{font-size:22px;font-weight:800;color:#fff;margin-bottom:5px}}.ssub{{font-size:14px;color:var(--muted);margin-bottom:28px}}
+.picks-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}}
+.tc{{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:border-color .15s;display:flex;gap:10px}}.tc:hover{{border-color:var(--blue)}}
+.tc-body{{flex:1;min-width:0}}
+.pips,.vpips{{display:flex;gap:2px}}.pip{{width:7px;height:7px;border-radius:1px}}.pg{{background:var(--green)}}.pa{{background:var(--amber)}}.pr{{background:var(--red)}}.po{{background:var(--bg3);border:1px solid var(--border)}}
+.vp{{width:8px;height:8px;border-radius:2px}}.von{{background:var(--blue)}}.voff{{background:var(--bg3);border:1px solid var(--border)}}
+.fpip{{width:8px;height:8px;border-radius:2px}}.fon{{background:var(--amber)}}.foff{{background:var(--bg3);border:1px solid var(--border)}}
+.toolbar{{padding:10px 28px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;background:var(--bg);border-bottom:1px solid var(--b2);position:sticky;top:49px;z-index:90}}
+.fbtn{{padding:4px 11px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--muted);transition:all .12s;white-space:nowrap}}
+.fbtn.on{{border-color:var(--blue);background:rgba(56,139,253,.12);color:var(--blue)}}.fbtn:hover:not(.on){{border-color:var(--muted);color:var(--text)}}
+input.srch,select{{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 9px;font-size:11px;outline:none;font-family:'Inter'}}
+input.srch{{width:150px}}input.srch::placeholder{{color:var(--muted)}}input.srch:focus,select:focus{{border-color:var(--blue)}}
+.cnt{{font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap}}
+.twrap{{margin:0 28px 28px;border:1px solid var(--border);border-radius:10px;overflow:hidden;overflow-x:auto}}
+table{{width:100%;border-collapse:collapse;min-width:980px}}
+thead th{{background:var(--bg2);padding:9px 11px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--border);white-space:nowrap}}
+tbody tr{{border-bottom:1px solid var(--b2);cursor:pointer;transition:background .08s}}tbody tr:hover{{background:var(--bg2)}}tbody tr:last-child{{border-bottom:none}}
+tbody td{{padding:9px 11px;vertical-align:middle}}
+.tkr{{font-weight:800;font-size:14px;font-family:'JetBrains Mono';color:#fff}}.co{{font-size:10px;color:var(--muted);margin-top:1px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.badge{{display:inline-flex;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700}}
+.bb{{background:rgba(46,160,67,.15);color:var(--green);border:1px solid rgba(46,160,67,.35)}}.bp{{background:rgba(56,139,253,.15);color:var(--blue);border:1px solid rgba(56,139,253,.35)}}.bw{{background:rgba(210,153,34,.15);color:var(--amber);border:1px solid rgba(210,153,34,.35)}}
+.pv{{font-family:'JetBrains Mono';font-size:13px;font-weight:600}}.gn{{color:var(--green)}}.rd{{color:var(--red)}}.gy{{color:var(--muted)}}
+.vhigh{{color:var(--green);font-weight:700}}.vmed{{color:var(--amber);font-weight:600}}.vlow{{color:var(--muted)}}
+.pvg{{color:var(--green);font-weight:600}}.pvo{{color:var(--amber)}}.pvw{{color:var(--muted)}}
+.sec{{font-size:10px;color:#8b949e;max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.sig{{font-size:11px;color:#c9d1d9;line-height:1.4;max-width:200px}}.mc{{font-family:'JetBrains Mono';font-size:11px;color:#8b949e}}
+/* detail panel */
+.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 170px 1fr 1fr;gap:18px;border-top:1px solid var(--b2)}}
+.dh{{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px}}
+.cl{{display:flex;flex-direction:column;gap:3px}}.cr{{display:flex;align-items:flex-start;gap:5px;font-size:11px;line-height:1.5}}.cr.ok{{color:var(--green)}}.cr.no{{color:#484f58}}.ci{{width:12px;flex-shrink:0;font-size:10px;margin-top:1px}}
+.mat{{width:100%;border-collapse:collapse;font-size:11px}}.mat td{{padding:2px 0}}.mlb{{color:var(--muted);width:56px}}.mbar{{padding:2px 6px;width:110px}}.mbw{{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}}.mbi{{height:100%;border-radius:3px}}.mvl{{font-family:'JetBrains Mono';color:#8b949e;text-align:right;width:62px}}
+.abox{{background:var(--bg2);border-radius:8px;padding:13px;border-left:3px solid var(--border);font-size:12px;color:#8b949e;line-height:1.8}}.aact{{margin-top:9px;font-weight:700;font-size:12px;padding:7px 11px;border-radius:6px}}
+.abuy{{color:var(--green);background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2)}}.awch{{color:var(--blue);background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2)}}.ahld{{color:var(--amber);background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2)}}
+.pg2{{display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:10px;margin-top:9px}}.pi{{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--b2)}}.pi:last-child{{border:none}}.pk{{color:var(--muted)}}
+/* revenue sparkbar */
+.rev-bars{{display:flex;align-items:flex-end;gap:3px;height:36px;margin:6px 0}}
+.rev-bar-wrap{{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1}}
+.rev-bar{{width:100%;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}}
+.rev-bar-lbl{{font-size:8px;color:var(--muted)}}
+/* event badges */
+.ev-hot{{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:800;background:rgba(240,224,64,.1);color:var(--gold);border:1px solid rgba(240,224,64,.35);margin-top:6px}}
+.ev-soon{{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:700;background:rgba(56,139,253,.1);color:var(--blue);border:1px solid rgba(56,139,253,.3);margin-top:6px}}
+.ev-div{{font-size:10px;color:var(--amber);margin-top:5px}}
+.ev-none{{font-size:10px;color:#484f58;margin-top:6px}}
+.trend-chip{{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;margin-bottom:6px}}
+.trend-acc{{background:rgba(46,160,67,.12);color:var(--green);border:1px solid rgba(46,160,67,.3)}}
+.trend-grow{{background:rgba(139,195,74,.1);color:#8bc34a;border:1px solid rgba(139,195,74,.25)}}
+.trend-flat{{background:rgba(210,153,34,.1);color:var(--amber);border:1px solid rgba(210,153,34,.25)}}
+.trend-dec{{background:rgba(248,81,73,.1);color:var(--red);border:1px solid rgba(248,81,73,.25)}}
+/* fund score row in table */
+.fpips{{display:flex;gap:2px}}
+.empty{{text-align:center;padding:50px;color:var(--muted)}}
+footer{{background:#010409;border-top:1px solid var(--border);padding:20px 28px;text-align:center;font-size:11px;color:var(--muted)}}
+@media(max-width:700px){{.dpanel{{grid-template-columns:1fr!important}}}}
 </style>
 </head>
 <body>
+<nav>
+  <div class="nlogo"><div class="ndot"></div>SEPA+VCP ASX Screener</div>
+  <div class="nlinks"><a href="#picks">Top Picks</a><a href="#screener">Full Screener</a></div>
+  <span class="nbadge">● Live — {today_str}</span>
+</nav>
 
-<header class="header">
-  <div class="header-top">
-    <div class="logo">ASX <span>SEPA+VCP</span> Screener</div>
-    <div class="updated">Updated: {today} · {total} stocks screened</div>
-    <div class="summary-pills">
-      <span class="summary-pill pill-total">📊 {total} Total</span>
-      <span class="summary-pill pill-break">🔥 {len(breakouts)} Breakouts</span>
-      <span class="summary-pill pill-near">👀 {len(near_pivot)} Near Pivot</span>
-      <span class="summary-pill pill-watch">📋 {len(watch)} Watch</span>
-    </div>
-  </div>
-</header>
-
-<div class="filters">
-  <input type="text" class="filter-search" placeholder="🔍 Search ticker or name..." onkeyup="applyFilters()">
-  <div class="filter-group">
-    <label>Sector</label>
-    <select onchange="applyFilters()">
-      <option value="">All Sectors</option>
-      {sector_options}
-    </select>
-  </div>
-  <div class="filter-group">
-    <label>SEPA ≥</label>
-    <select id="f-sepa" onchange="applyFilters()">
-      <option value="0">Any</option>
-      <option value="3">3+</option>
-      <option value="4">4+</option>
-      <option value="5">5+</option>
-      <option value="6">6+</option>
-    </select>
-  </div>
-  <div class="filter-group">
-    <label>VCP ≥</label>
-    <select id="f-vcp" onchange="applyFilters()">
-      <option value="0">Any</option>
-      <option value="2">2+</option>
-      <option value="3">3+</option>
-      <option value="4">4</option>
-    </select>
-  </div>
-  <div class="filter-group">
-    <label>Status</label>
-    <select id="f-status" onchange="applyFilters()">
-      <option value="">All</option>
-      <option value="Breakout">Breakout</option>
-      <option value="NearPivot">Near Pivot</option>
-      <option value="Watch">Watch</option>
-    </select>
-  </div>
-  <div class="filter-group">
-    <label>Vol ≥</label>
-    <select id="f-vol" onchange="applyFilters()">
-      <option value="0">Any</option>
-      <option value="1.5">1.5x</option>
-      <option value="2">2x</option>
-      <option value="3">3x</option>
-    </select>
-  </div>
-  <div class="filter-group">
-    <label>Sort</label>
-    <select id="f-sort" onchange="applyFilters()">
-      <option value="sepa">SEPA Score</option>
-      <option value="vcp">VCP Score</option>
-      <option value="vol">Volume Ratio</option>
-      <option value="chg1d">1D Change</option>
-      <option value="chg250d">1Y Change</option>
-      <option value="mktcap">Market Cap</option>
-    </select>
+<div class="hero">
+  <h1>ASX Stock Screener<br><span>SEPA + VCP + Fundamentals</span></h1>
+  <p>Minervini's Stage 2 Trend Template combined with Volatility Contraction Pattern analysis, net revenue trend, EPS growth, and upcoming catalyst events — applied to every ASX stock with market cap over $100M.</p>
+  <div class="hero-stats">
+    <div class="hs"><div class="hs-n" style="color:var(--green)">{len(breakouts)}</div><div class="hs-l">Breakouts Today</div></div>
+    <div class="hs"><div class="hs-n" style="color:var(--blue)">{len(pivots)}</div><div class="hs-l">Near Pivot</div></div>
+    <div class="hs"><div class="hs-n" style="color:var(--amber)">{len(watching)}</div><div class="hs-l">On Watch</div></div>
+    <div class="hs"><div class="hs-n" style="color:var(--text)">{n}</div><div class="hs-l">Stocks Screened</div></div>
   </div>
 </div>
 
-<main>
-  {breakout_html}
-  {nearpivot_html}
-  {watch_html}
-</main>
+<div class="section" id="picks">
+  <div class="stitle">🏆 Top 10 ASX Stock Picks Today</div>
+  <div class="ssub">Highest conviction SEPA + VCP setups — ranked by combined score. Click any card to jump to full analysis including fundamentals and upcoming catalysts.</div>
+  <div class="picks-grid">{top_html}</div>
+  <p style="font-size:11px;color:var(--muted);margin-top:16px;line-height:1.7">
+    <strong style="color:#c9d1d9">How to read these picks:</strong> Each card shows the SEPA score (green pips, out of 7) and VCP score (blue pips, out of 4).
+    Breakout stocks are already moving — consider entry at market with stop below MA50. Near Pivot stocks are setting up — add to watchlist and set an alert at the recent high.
+    Always size positions at 1-2% risk per trade and never chase a stock that has already moved 5%+ from the ideal entry point.
+  </p>
+</div>
+
+<div id="screener">
+<div class="toolbar">
+  <button class="fbtn on" onclick="setF('all',this)">All ({n})</button>
+  <button class="fbtn" onclick="setF('breakout',this)">🟢 Breakout ({len(breakouts)})</button>
+  <button class="fbtn" onclick="setF('near-pivot',this)">🔵 Near Pivot ({len(pivots)})</button>
+  <button class="fbtn" onclick="setF('watch',this)">🟡 Watch ({len(watching)})</button>
+  <input class="srch" id="srch" placeholder="🔍 Ticker or name..." oninput="render()">
+  <select id="srt" onchange="render()">
+    <option value="sepa">↓ SEPA Score</option>
+    <option value="vcp">↓ VCP Score</option>
+    <option value="vol">↓ Volume Ratio</option>
+    <option value="pvr">↓ PVR</option>
+    <option value="fund">↓ Fund Score</option>
+    <option value="p250">↓ 12M Performance</option>
+    <option value="mc">↓ Market Cap</option>
+  </select>
+  <select id="sec" onchange="render()"><option value="">All Sectors</option>{sector_opts}</select>
+  <span class="cnt" id="cnt"></span>
+</div>
+<div class="twrap"><table>
+  <thead><tr>
+    <th>#</th><th>Ticker</th><th>Signal</th>
+    <th>SEPA /7</th><th>VCP /4</th>
+    <th>Price</th><th>Today</th><th>Rel.Vol</th><th>PVR</th>
+    <th>Fund /3</th><th>Net Revenue</th><th>Catalyst / Event</th>
+    <th>12M</th><th>Mkt Cap</th><th>Sector</th>
+  </tr></thead>
+  <tbody id="tbody"></tbody>
+</table></div>
+</div>
+
+<footer>
+  <strong>SEPA + VCP ASX Screener</strong> · Data sourced from Yahoo Finance · Generated {today_str}<br>
+  <span style="font-size:11px;opacity:.6">⚠️ This screener is for educational and research purposes only. It does not constitute financial advice. Past performance is not indicative of future results. Always conduct your own research and consult a licensed financial adviser before making investment decisions. All prices in AUD.</span>
+</footer>
 
 <script>
-function switchTab(btn, tabName) {{
-  const card = btn.closest('.card');
-  card.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  card.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  card.querySelector(`[data-tab="${{tabName}}"]`).classList.add('active');
+const D={json_data};
+let filt='all';
+
+function setF(f,el){{
+  filt=f;
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+  render();
 }}
 
-function applyFilters() {{
-  const search = document.querySelector('.filter-search').value.toLowerCase();
-  const sector = document.querySelector('select').value;
-  const sepa   = parseFloat(document.getElementById('f-sepa').value) || 0;
-  const vcp    = parseFloat(document.getElementById('f-vcp').value) || 0;
-  const status = document.getElementById('f-status').value;
-  const vol    = parseFloat(document.getElementById('f-vol').value) || 0;
-  const sort   = document.getElementById('f-sort').value;
-
-  let cards = Array.from(document.querySelectorAll('.card'));
-
-  cards.forEach(c => {{
-    const ticker  = (c.dataset.ticker || '').toLowerCase();
-    const cname   = (c.querySelector('.company-name')?.textContent || '').toLowerCase();
-    const csector = c.dataset.sector || '';
-    const csepa   = parseInt(c.dataset.sepa) || 0;
-    const cvcp    = parseInt(c.dataset.vcp) || 0;
-    const cstatus = c.dataset.status || '';
-    const cvol    = parseFloat(c.dataset.vol) || 0;
-    const matchSearch = !search || ticker.includes(search) || cname.includes(search);
-    const matchSector = !sector || csector === sector;
-    const matchSepa   = csepa >= sepa;
-    const matchVcp    = cvcp  >= vcp;
-    const matchStatus = !status || cstatus === status;
-    const matchVol    = cvol  >= vol;
-    c.style.display = (matchSearch && matchSector && matchSepa && matchVcp && matchStatus && matchVol) ? '' : 'none';
-  }});
-
-  // Re-sort visible cards within each grid
-  document.querySelectorAll('.card-grid').forEach(grid => {{
-    const visible = Array.from(grid.querySelectorAll('.card')).filter(c => c.style.display !== 'none');
-    visible.sort((a,b) => {{
-      const getVal = (c) => {{
-        if (sort === 'sepa')    return parseInt(c.dataset.sepa) || 0;
-        if (sort === 'vcp')     return parseInt(c.dataset.vcp) || 0;
-        if (sort === 'vol')     return parseFloat(c.dataset.vol) || 0;
-        if (sort === 'mktcap')  return parseInt(c.dataset.mktcap) || 0;
-        return 0;
-      }};
-      return getVal(b) - getVal(a);
-    }});
-    visible.forEach(c => grid.appendChild(c));
-  }});
+function jmp(t){{
+  document.getElementById('screener').scrollIntoView({{behavior:'smooth'}});
+  document.getElementById('srch').value=t;
+  setTimeout(()=>{{render();const r=document.querySelector('#tbody tr');if(r)r.click();}},400);
 }}
+
+function fmtGrowth(v,hi=20,med=5){{
+  if(v===null||v===undefined)return'<span style="color:#484f58">N/A</span>';
+  const col=v>=hi?'#2ea043':v>=med?'#d29922':v>=0?'#8b949e':'#f85149';
+  const arrow=v>0?'↑ ':v<0?'↓ ':'';
+  return`<span style="color:${{col}};font-weight:700">${{arrow}}${{v>=0?'+':''}}${{v}}%</span>`;
+}}
+
+function revTrendChip(trend){{
+  if(!trend)return'';
+  const map={{
+    'accelerating':['trend-chip trend-acc','↑↑ Accelerating'],
+    'growing':['trend-chip trend-grow','↑ Growing'],
+    'flat':['trend-chip trend-flat','→ Flat'],
+    'declining':['trend-chip trend-dec','↓ Declining'],
+  }};
+  const [cls,lbl]=map[trend]||['',''];
+  return cls?`<div class="${{cls}}">${{lbl}}</div>`:'';
+}}
+
+function revBars(quarters){{
+  if(!quarters||!quarters.length)return'<div style="color:#484f58;font-size:10px">No quarterly data</div>';
+  const vals=quarters.map(q=>q[1]);
+  const mx=Math.max(...vals.map(Math.abs),1);
+  const bars=quarters.slice().reverse().map(([lbl,val])=>{{
+    const pct=Math.round(Math.abs(val)/mx*100);
+    const col=val>=0?'#2ea043':'#f85149';
+    return`<div class="rev-bar-wrap">
+      <div class="rev-bar" style="height:${{pct}}%;background:${{col}};width:100%"></div>
+      <div class="rev-bar-lbl">${{lbl}}</div>
+    </div>`;
+  }}).join('');
+  return`<div class="rev-bars">${{bars}}</div>`;
+}}
+
+function render(){{
+  const srt=document.getElementById('srt').value,
+        q=document.getElementById('srch').value.toLowerCase(),
+        sec=document.getElementById('sec').value;
+  let d=D.filter(r=>{{
+    if(filt!=='all'&&r.status!==filt)return false;
+    if(sec&&r.sector!==sec)return false;
+    if(q&&!r.ticker.toLowerCase().includes(q)&&!r.name.toLowerCase().includes(q))return false;
+    return true;
+  }});
+  d.sort((a,b)=>{{
+    if(srt==='sepa') return(b.sepaScore*10+b.vcpScore)-(a.sepaScore*10+a.vcpScore);
+    if(srt==='vcp')  return b.vcpScore-a.vcpScore;
+    if(srt==='vol')  return b.volRatio-a.volRatio;
+    if(srt==='pvr')  return b.pvr-a.pvr;
+    if(srt==='fund') return (b.fundScore||0)-(a.fundScore||0);
+    if(srt==='p250') return b.chg250d-a.chg250d;
+    if(srt==='mc')   return b.mktcap-a.mktcap;
+    return 0;
+  }});
+  document.getElementById('cnt').textContent=d.length+' shown';
+  if(!d.length){{document.getElementById('tbody').innerHTML='<tr><td colspan="15"><div class="empty">No stocks match</div></td></tr>';return;}}
+  document.getElementById('tbody').innerHTML=d.map((r,i)=>row(r,i)).join('');
+}}
+
+function row(r,i){{
+  const sc=r.sepaScore,pc=sc>=6?'pg':sc>=4?'pa':'pr';
+  const ps=Array.from({{length:7}},(_,j)=>`<div class="pip ${{j<sc?pc:'po'}}"></div>`).join('');
+  const vs=Array.from({{length:4}},(_,j)=>`<div class="vp ${{j<r.vcpScore?'von':'voff'}}"></div>`).join('');
+  const fs=r.fundScore||0;
+  const fps=Array.from({{length:3}},(_,j)=>`<div class="fpip ${{j<fs?'fon':'foff'}}"></div>`).join('');
+  const bdg=r.status==='breakout'?'<span class="badge bb">BREAKOUT</span>':r.status==='near-pivot'?'<span class="badge bp">NEAR PIVOT</span>':'<span class="badge bw">WATCH</span>';
+  const cc=r.change>0?'gn':r.change<0?'rd':'gy';
+  const vc=r.volRatio>=2?'vhigh':r.volRatio>=1.5?'vmed':'vlow';
+  const p2=r.pvr>=1.5?'pvg':r.pvr>=1?'pvo':'pvw';
+  const q2=r.chg250d>=0?'gn':'rd';
+
+  // Net revenue cell
+  let revCell='<span style="color:#484f58;font-size:10px">N/A</span>';
+  if(r.revGrowth!==null&&r.revGrowth!==undefined){{
+    const trendIcons={{'accelerating':'↑↑','growing':'↑','flat':'→','declining':'↓'}};
+    const trendCols={{'accelerating':'#2ea043','growing':'#8bc34a','flat':'#d29922','declining':'#f85149'}};
+    const icon=trendIcons[r.revTrend]||'';
+    const col=trendCols[r.revTrend]||(r.revGrowth>=0?'#8b949e':'#f85149');
+    revCell=`<span style="color:${{col}};font-weight:700;font-size:11px">${{icon}} ${{r.revGrowth>=0?'+':''}}${{r.revGrowth}}%</span>`;
+  }}
+
+  // catalyst / event cell
+  let evCell='<span style="color:#484f58;font-size:10px">—</span>';
+  if(r.nextEventLabel){{
+    const hot=r.nextEventLabel.includes('⚡');
+    const ec=hot?'var(--gold)':'var(--blue)';
+    evCell=`<span style="color:${{ec}};font-size:10px;font-weight:700">${{r.nextEventLabel}}</span>`;
+  }}
+  return `<tr onclick="tog(${{i}})"><td style="color:#484f58;font-size:10px">${{i+1}}</td><td><div class="tkr">${{r.ticker}}</div><div class="co" title="${{r.name}}">${{r.name}}</div></td><td>${{bdg}}</td><td><div style="display:flex;align-items:center;gap:3px"><div class="pips">${{ps}}</div><span style="font-size:10px;color:var(--muted)">${{sc}}</span></div></td><td><div class="vpips">${{vs}}</div></td><td><span class="pv">$${{r.price}}</span></td><td><span class="${{cc}}">${{(r.change>0?'+':'')+r.change}}%</span></td><td><span class="${{vc}}">${{r.volRatio}}x</span></td><td><span class="${{p2}}">${{r.pvr}}</span></td><td><div class="fpips" style="display:flex;gap:2px">${{fps}}</div><span style="font-size:9px;color:var(--muted);margin-left:3px">${{fs}}/3</span></td><td style="white-space:nowrap">${{revCell}}</td><td style="white-space:nowrap">${{evCell}}</td><td><span class="${{q2}}">${{(r.chg250d>=0?'+':'')+r.chg250d}}%</span></td><td class="mc">${{r.mktcapFmt}}</td><td class="sec" title="${{r.sector}}">${{r.sector||''}}</td></tr><tr class="drow" id="d${{i}}" style="display:none"><td colspan="15">${{det(r)}}</td></tr>`;
+}}
+
+function det(r){{
+  const c=r.checks;
+  const cr=[[c.ma50,`Price ($${{r.price}}) > MA50 ($${{r.ma50}})`],[c.ma150,`MA50 > MA150 ($${{r.ma150}})`],[c.ma200,`MA150 > MA200 ($${{r.ma200}})`],[c.trend,`200-day MA trending up (12M: ${{(r.chg250d>=0?'+':'')+r.chg250d}}%)`],[c.high,`Within 25% of 52W high (${{r.pctFromHigh}}% below)`],[c.low,`25%+ above 52W low (${{r.pctAboveLow}}% above)`],[c.vol,`Volume breakout ≥1.5x (${{r.volRatio}}x) + PVR ${{r.pvr}}`]].map(([ok,l])=>`<div class="cr ${{ok?'ok':'no'}}"><span class="ci">${{ok?'✓':'✗'}}</span>${{l}}</div>`).join('');
+  const mx=Math.max(r.price,r.ma50,r.ma150,r.ma200);
+  const mb=(lb,v,col)=>`<tr><td class="mlb">${{lb}}</td><td class="mbar"><div class="mbw"><div class="mbi" style="width:${{Math.round(v/mx*100)}}%;background:${{col}}"></div></div></td><td class="mvl">$${{v}}</td></tr>`;
+  const vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) — VCP forming','Ideal (4/4) — textbook base'][r.vcpScore];
+  const ac=r.status==='breakout'?'abuy':r.status==='near-pivot'?'awch':'ahld';
+  const at=r.status==='breakout'?'→ BUY ZONE: Consider entry. Stop-loss below MA50. Risk 1-2% portfolio.':r.status==='near-pivot'?'→ WATCHLIST: Set alert at pivot high. Enter on breakout with vol >1.5x.':'→ MONITOR: Wait for VCP to tighten and volume to dry up.';
+
+  // ── Fundamentals column ────────────────────────────────────────────────
+  const rg=r.revGrowth, eg=r.epsGrowth, nm=r.netMargin, te=r.trailingEps, fe=r.forwardEps, fs=r.fundScore||0;
+  const fpips=Array.from({{length:3}},(_,j)=>`<div class="fpip" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${{j<fs?'#d29922':'#21262d'}};border:1px solid ${{j<fs?'#d29922':'#30363d'}}"></div>`).join('&nbsp;');
+
+  let epsRows='';
+  if(te!==null&&te!==undefined){{const ec=te>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Trail EPS</span><span style="color:${{ec}};font-family:monospace">$${{te}}</span></div>`;}}
+  if(fe!==null&&fe!==undefined){{const ec=fe>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Fwd EPS</span><span style="color:${{ec}};font-family:monospace">$${{fe}}</span></div>`;}}
+  let nmRow='';
+  if(nm!==null&&nm!==undefined){{const mc=nm>=15?'#2ea043':nm>0?'#d29922':'#f85149';nmRow=`<div class="pi"><span class="pk">Net Margin</span><span style="color:${{mc}}">${{nm}}%</span></div>`;}}
+
+  const fundCol=`
+    <div>
+      <div class="dh">Net Revenue Trend &nbsp;${{fpips}}</div>
+      ${{revTrendChip(r.revTrend)}}
+      ${{revBars(r.revQuarters)}}
+      <table class="mat">
+        <tr><td class="mlb">Rev YoY</td><td colspan="2">${{fmtGrowth(rg)}}</td></tr>
+        <tr><td class="mlb">EPS Grw</td><td colspan="2">${{fmtGrowth(eg,10,0)}}</td></tr>
+      </table>
+      <div class="pg2" style="margin-top:8px">${{nmRow}}${{epsRows}}</div>
+    </div>`;
+
+  // ── Upcoming events column ─────────────────────────────────────────────
+  let evHtml='<div class="ev-none">No upcoming events found</div>';
+  const evLines=[];
+  if(r.nextEventLabel){{
+    const hot=r.nextEventLabel.includes('⚡');
+    evLines.push(`<div class="${{hot?'ev-hot':'ev-soon'}}">${{r.nextEventLabel}}</div>`);
+    if(r.nextEarnings){{
+      evLines.push(`<div style="font-size:10px;color:#484f58;margin-top:3px">📆 ${{r.nextEarnings}}</div>`);
+    }}
+  }}
+  if(r.nextExDiv){{
+    evLines.push(`<div class="ev-div">💰 Ex-Dividend: ${{r.nextExDiv}}</div>`);
+  }}
+  if(evLines.length){{
+    evHtml=evLines.join('');
+  }}
+
+  const evCol=`
+    <div>
+      <div class="dh">Catalyst &amp; Upcoming Events</div>
+      ${{evHtml}}
+      <div class="abox" style="margin-top:12px">${{r.analysis}}<div class="aact ${{ac}}">${{at}}</div></div>
+    </div>`;
+
+  return `<div class="dpanel">
+    <div>
+      <div class="dh">SEPA Checklist — ${{r.sepaScore}}/7</div>
+      <div class="cl">${{cr}}</div>
+    </div>
+    <div>
+      <div class="dh">Moving Averages</div>
+      <table class="mat">${{mb('Price',r.price,'#e6edf3')}}${{mb('MA50',r.ma50,c.ma50?'#2ea043':'#f85149')}}${{mb('MA150',r.ma150,c.ma150?'#2ea043':'#f85149')}}${{mb('MA200',r.ma200,c.ma200?'#2ea043':'#f85149')}}</table>
+      <div style="margin-top:10px">
+        <div class="dh">VCP: ${{r.vcpScore}}/4</div>
+        <div style="font-size:10px;color:#8b949e;margin-top:2px;line-height:1.4">${{vd}}</div>
+      </div>
+      <div class="pg2">
+        <div class="pi"><span class="pk">5D</span><span class="${{r.chg5d>=0?'gn':'rd'}}">${{(r.chg5d>=0?'+':'')+r.chg5d}}%</span></div>
+        <div class="pi"><span class="pk">60D</span><span class="${{r.chg60d>=0?'gn':'rd'}}">${{(r.chg60d>=0?'+':'')+r.chg60d}}%</span></div>
+        <div class="pi"><span class="pk">12M</span><span class="${{r.chg250d>=0?'gn':'rd'}}">${{(r.chg250d>=0?'+':'')+r.chg250d}}%</span></div>
+        <div class="pi"><span class="pk">Cap</span><span style="color:#8b949e">${{r.mktcapFmt}}</span></div>
+      </div>
+    </div>
+    ${{fundCol}}
+    ${{evCol}}
+  </div>`;
+}}
+
+function tog(i){{const el=document.getElementById('d'+i);el.style.display=el.style.display==='none'?'table-row':'none';}}
+render();
 </script>
 </body>
-</html>'''
-    return html
-
-def publish(path):
-    if not NETLIFY_TOKEN or not NETLIFY_SITE_ID:
-        print("No Netlify credentials — skipping deploy")
-        return
-    print("Publishing to Netlify...")
-    try:
-        with open(path, 'rb') as f:
-            content = f.read()
-        sha = hashlib.sha1(content).hexdigest()
-        deploy_url = f"https://api.netlify.com/api/v1/sites/{NETLIFY_SITE_ID}/deploys"
-        headers_json = {"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/json"}
-        r = requests.post(deploy_url, headers=headers_json, json={"files": {"/index.html": sha}})
-        try: deploy = r.json()
-        except Exception as e: print(f"Netlify gave non-JSON response: {r.text[:200]}"); return
-        did = deploy.get("id")
-        if not did: return
-        r2 = requests.put(f"https://api.netlify.com/api/v1/deploys/{did}/files/index.html",
-                         headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/octet-stream"},
-                         data=content)
-        if r2.status_code == 200: print(f"Published: https://{NETLIFY_SITE_ID}.netlify.app")
-        else: print(f"Netlify Upload Failed: {r2.status_code} {r2.text[:200]}")
-    except Exception as err:
-        print(f"Deployment failure: {err}")
+</html>"""
