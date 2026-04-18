@@ -25,91 +25,23 @@ session.headers.update({
     "Connection": "keep-alive"
 })
 
-ASX_TICKERS = [
-    "CBA.AX","BHP.AX","RIO.AX","NEM.AX","WBC.AX","NAB.AX","ANZ.AX","WES.AX",
-    "MQG.AX","CSL.AX","WDS.AX","FMG.AX","TLS.AX","GMG.AX","XYZ.AX","RMD.AX",
-    "WOW.AX","TCL.AX","QBE.AX","SIG.AX","BXB.AX","COL.AX","ALL.AX","AMC.AX",
-    "NST.AX","STO.AX","EVN.AX","AAI.AX","NWS.AX","ORG.AX","LYC.AX","REA.AX",
-    "FPH.AX","S32.AX","SUN.AX","IAG.AX","SCG.AX","SGH.AX","PLS.AX","CPU.AX",
-    "JHX.AX","SOL.AX","WTC.AX","QAN.AX","APA.AX","XRO.AX","PME.AX","MPL.AX",
-    "MEZ.AX","TLC.AX","BSL.AX","AIA.AX","MIN.AX","COH.AX","YAL.AX","VCX.AX",
-    "NXG.AX","DPM.AX","SGP.AX","SHL.AX","ALQ.AX","ASX.AX","IFT.AX","LNW.AX",
-    "ORI.AX","RHC.AX","TNE.AX","CHC.AX","REH.AX","GPT.AX","QUB.AX","CAR.AX",
-    "AFI.AX","JBH.AX","ALD.AX","TPG.AX","MCY.AX","CSC.AX","WHC.AX","CEN.AX",
-    "SFR.AX","NXT.AX","MGR.AX","A2M.AX","RMS.AX","AZJ.AX","PRU.AX","HUB.AX",
-    "AGL.AX","GGP.AX","ARG.AX","DXS.AX","GMD.AX","ALX.AX","HVN.AX","APE.AX",
-    "EDV.AX","IGO.AX","AII.AX","CDA.AX","BEN.AX","CGF.AX","WOR.AX","LTR.AX",
-    "DNL.AX","NWL.AX","CWY.AX","DOW.AX","WGX.AX","GQG.AX","PDN.AX","SEK.AX",
-    "NHC.AX","RRL.AX","CMM.AX","360.AX","SDF.AX","TLX.AX","BOQ.AX","VNT.AX",
-    "ANN.AX","VAU.AX","VEA.AX","NIC.AX","EBO.AX","NSR.AX","SGM.AX","BRG.AX",
-    "BFL.AX","4DX.AX","DRO.AX","WAF.AX","CNU.AX","MTS.AX","EMR.AX","TUA.AX",
-    "SPK.AX","IFL.AX","PNI.AX","AMP.AX","AUB.AX","NHF.AX","TWE.AX","SUL.AX",
-    "BPT.AX","ILU.AX","CIA.AX","MND.AX","FBU.AX","PXA.AX","MSB.AX","MFF.AX",
-    "RSG.AX","BWP.AX","NWH.AX","SMR.AX","DBI.AX","RGN.AX","LSF.AX","HDN.AX",
-    "CLW.AX","LOV.AX","RWC.AX","ORA.AX","MXT.AX","LLC.AX","FLT.AX","SX2.AX",
-    "CQR.AX","TAH.AX","OBM.AX","BGL.AX","DRR.AX","EVT.AX","GNE.AX","ASB.AX",
-    "ZIP.AX","PMV.AX","FRW.AX","IMD.AX","WAM.AX","ALK.AX","REG.AX","WLE.AX",
-    "VGN.AX","PPT.AX","PDI.AX","CIP.AX","ZIM.AX","RYM.AX","RDX.AX","BGA.AX",
-    "PRN.AX","MFG.AX","ARB.AX","ASK.AX","GLF.AX","GYG.AX","DTR.AX","SLC.AX",
-    "DYL.AX","EOS.AX","JDO.AX","MGH.AX","GDG.AX","GOZ.AX","DMP.AX","EQR.AX",
-    "MAQ.AX","INA.AX","CBO.AX","CYL.AX","ELD.AX","VUL.AX","WPR.AX","MAD.AX",
-    "SRG.AX","DDR.AX","MAH.AX","RXR.AX","NEU.AX","SLX.AX","GNC.AX","KAR.AX",
-    "LIN.AX","NEC.AX","SNL.AX","MAF.AX","ABB.AX","HLI.AX","BKI.AX","MI6.AX",
-    "MP1.AX","DVP.AX","ELV.AX","NCK.AX","GNP.AX","CNI.AX","ARF.AX","TEA.AX",
-    "SRL.AX","AUI.AX","PGF.AX","IRE.AX","GCI.AX","ARU.AX","UOS.AX","FFM.AX",
-    "PNR.AX","ELS.AX","CU6.AX","ERA.AX","TBN.AX","SSM.AX","AIZ.AX","BRE.AX",
-    "MLX.AX","BCI.AX","NAN.AX","OCL.AX","KCN.AX","SIQ.AX","IPX.AX","PYC.AX",
-    "IEL.AX","DUI.AX","CKF.AX","LFG.AX","CAT.AX","APZ.AX","KLS.AX","DTL.AX",
-    "RIC.AX","CMW.AX","WA1.AX","MMS.AX","HSN.AX","PL8.AX","HGH.AX","NGI.AX",
-    "WEB.AX","CQE.AX","QRI.AX","LFS.AX","HMC.AX","RPL.AX","CIN.AX","DGT.AX",
-    "GLS.AX","ABG.AX","PWH.AX","AOV.AX","BVS.AX","IDX.AX","TPW.AX","PPC.AX",
-    "IPH.AX","C79.AX","FCL.AX","WBT.AX","WGN.AX","AAC.AX","VSL.AX","SDR.AX",
-    "PPM.AX","RFF.AX","AVR.AX","NUF.AX","CCL.AX","MYS.AX","WGB.AX","SXE.AX",
-    "DJW.AX","DXI.AX","CVL.AX","BMN.AX","QAL.AX","ING.AX","A4N.AX","SBM.AX",
-    "CCP.AX","CXO.AX","BC8.AX","SRV.AX","TVN.AX","BNZ.AX","FML.AX","KKC.AX",
-    "GNG.AX","SMI.AX","DUR.AX","HM1.AX","TCG.AX","GTK.AX","CWP.AX","BOE.AX",
-    "UNI.AX","EIQ.AX","PNV.AX","EHL.AX","FGG.AX","IMR.AX","29M.AX","WHF.AX",
-    "OPH.AX","MIR.AX","RXL.AX","LIC.AX","WIA.AX","COF.AX","PFP.AX","MYR.AX",
-    "GWA.AX","MAU.AX","SHV.AX","SYL.AX","EQT.AX","CRN.AX","TWR.AX","FGX.AX",
-    "LRV.AX","CHN.AX","SHA.AX","FPR.AX","LYL.AX","JMS.AX","AEF.AX","WC8.AX",
-    "AYA.AX","STK.AX","ASG.AX","AFG.AX","CUV.AX","JIN.AX","FRS.AX","NMG.AX",
-    "MEK.AX","A1G.AX","OML.AX","AEL.AX","AIS.AX","RAC.AX","AX1.AX","WQG.AX",
-    "PIC.AX","OBL.AX","SKS.AX","AUC.AX","CDP.AX","SPZ.AX","IPG.AX","SVM.AX",
-    "HZN.AX","MGX.AX","GLN.AX","BAP.AX","MMI.AX","MEI.AX","ALI.AX","WMI.AX",
-    "NXL.AX","MTM.AX","EOL.AX","TYR.AX","BFG.AX","HLS.AX","AGI.AX","CVW.AX",
-    "THL.AX","AMI.AX","PE1.AX","ASL.AX","BTR.AX","IGL.AX","APX.AX","QOR.AX",
-    "INR.AX","CGS.AX","ACL.AX","ASM.AX","TTT.AX","DXC.AX","EUR.AX","BTL.AX",
-    "BLX.AX","USL.AX","A1M.AX","TOK.AX","AZY.AX","RMC.AX","STX.AX","LGI.AX",
-    "CEL.AX","VYS.AX","KGN.AX","TGN.AX","KSL.AX","SVT.AX","BRN.AX","BCN.AX",
-    "PGC.AX","HCW.AX","LOT.AX","HUM.AX","VGL.AX","CTM.AX","GDI.AX","PPS.AX",
-    "AAR.AX","FID.AX","TRE.AX","SST.AX","TBR.AX","RHI.AX","NVA.AX","SVR.AX",
-    "PIA.AX","PBH.AX","PAC.AX","AMH.AX","MM8.AX","COG.AX","EBR.AX","MPW.AX",
-    "FDR.AX","OMA.AX","DUG.AX","GVF.AX","CAY.AX","ACF.AX","GRX.AX","ATR.AX",
-    "SXL.AX","WWI.AX","AEM.AX","PC2.AX","TOR.AX","AMA.AX","HCH.AX","TM1.AX",
-    "KCC.AX","ACE.AX","MCM.AX","MVF.AX","FEX.AX","PSC.AX","HRN.AX","BML.AX",
-    "SS1.AX","HRZ.AX","AQI.AX","ERM.AX","GG8.AX","ADH.AX","XRF.AX","TGM.AX",
-    "WAX.AX","NVX.AX","VMM.AX","CDM.AX","A11.AX","EGH.AX","HLO.AX","PEN.AX",
-    "NTU.AX","MYG.AX","BIS.AX","LAU.AX","TTM.AX","EML.AX","ORN.AX","KPG.AX",
-    "GDF.AX","GRR.AX","FRI.AX","TTX.AX","STN.AX","LAM.AX","AD8.AX","CYM.AX",
-    "POL.AX","WTM.AX","WRK.AX","CCV.AX","BHM.AX","WJL.AX","ETM.AX","OCC.AX",
-    "LDX.AX","BBN.AX","CEH.AX","ATA.AX","BGD.AX","HAV.AX","WAR.AX",
-    "ARX.AX","SPL.AX","AUE.AX","DXB.AX","WMA.AX","CUP.AX","EZL.AX","OMH.AX",
-    "VTM.AX","SYR.AX","MYX.AX","BET.AX","EGR.AX","ARR.AX","TER.AX","GEM.AX",
-    "SPD.AX","CAA.AX","EXR.AX","LKE.AX","SSG.AX","TGF.AX","JYC.AX","RNU.AX",
-    "KOV.AX","CVN.AX","RCT.AX","NZM.AX","AVH.AX","COI.AX","MTO.AX","BBL.AX",
-    "CVV.AX","AGE.AX","ELT.AX","RYD.AX","ONE.AX","MM1.AX","IVR.AX","FWD.AX",
-    "KAU.AX","VVA.AX","FDV.AX","KGL.AX","SDI.AX","PLT.AX","CY5.AX","RDY.AX",
-    "BTI.AX","FTI.AX","EMV.AX","FSA.AX","SGI.AX","DLI.AX","SKY.AX","CLX.AX",
-    "CLV.AX","FXG.AX","MKR.AX","VLS.AX","SOM.AX","TLG.AX","NYR.AX","GML.AX",
-    "RCE.AX","ENR.AX","MHJ.AX","BXN.AX","WAA.AX","ALC.AX","ERD.AX","SEC.AX",
-    "SEA.AX","BWN.AX","OFX.AX","MEU.AX","AHC.AX","ZEO.AX","LSX.AX","BRI.AX",
-    "ATX.AX","SHJ.AX","ACW.AX","GL1.AX","KAI.AX","URF.AX","FHE.AX","EL8.AX",
-    "HGO.AX","PEX.AX","SLS.AX","MLG.AX","AEE.AX","ARL.AX","CXL.AX","QPM.AX",
-    "PAR.AX","CNB.AX","SNC.AX","ART.AX","ANG.AX","HAS.AX","TKM.AX","TWD.AX",
-    "ILA.AX","AL3.AX","DEV.AX","RML.AX","CRD.AX","FAL.AX","EM3.AX","AQZ.AX",
-    "DRE.AX","CUE.AX","WOT.AX","GYG.AX","TEA.AX","NWL.AX",
-]
-ASX_TICKERS = list(dict.fromkeys(ASX_TICKERS))
+def get_all_asx_tickers():
+    """Dynamically fetch all ASX-listed tickers from the ASX website."""
+    try:
+        import io
+        url = "https://www.asx.com.au/asx/research/ASXListedCompanies.csv"
+        resp = session.get(url, timeout=30)
+        df = pd.read_csv(io.StringIO(resp.text), skiprows=1)
+        col = [c for c in df.columns if 'code' in c.lower() or 'asx' in c.lower()][0]
+        tickers = [str(row[col]).strip() + '.AX' for _, row in df.iterrows()
+                   if str(row[col]).strip() and len(str(row[col]).strip()) <= 5]
+        print(f"Loaded {len(tickers)} ASX tickers from ASX website")
+        return tickers
+    except Exception as e:
+        print(f"Failed to fetch ASX tickers dynamically: {e}")
+        return []
+
+ASX_TICKERS = get_all_asx_tickers()
 
 
 def fmt_cap(c):
