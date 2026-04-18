@@ -304,7 +304,7 @@ if __name__ == "__main__":
         html = build_dashboard.build(data)
         with open('index.html', 'w', encoding='utf-8') as f: f.write(html)
         print(f"Dashboard built: {len(html):,} chars")
-        build_dashboard.publish('index.html')
+        publish('index.html')
     except Exception as ex:
         import traceback
         tb = traceback.format_exc()
