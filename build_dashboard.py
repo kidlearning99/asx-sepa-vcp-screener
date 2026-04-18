@@ -259,7 +259,7 @@ function revTrendChip(trend){{
 }}
 
 function revBars(quarters){{
-  if(!quarters||!quarters.length)return'<div style="color:#484f58;font-size:10px">No quarterly data</div>';
+  if(!quarters||!Array.isArray(quarters)||!quarters.length)return'<div style="color:#484f58;font-size:10px">No quarterly data</div>';
   const vals=quarters.map(q=>q[1]);
   const mx=Math.max(...vals.map(Math.abs),1);
   const bars=quarters.slice().reverse().map(([lbl,val])=>{{

@@ -161,7 +161,7 @@ def score_stock(ticker, hist):
             "ticker": ticker.replace('.AX', ''), "name": ticker.replace('.AX', ''),
             "sector": "", "mktcap": 0, "mktcapFmt": "",
             "shortSignal": "", "analysis": "",
-            "revGrowth": None, "revTrend": None,
+            "revGrowth": None, "revTrend": None, "revQuarters": [],
             "epsGrowth": None, "netMargin": None,
             "trailingEps": None, "forwardEps": None, "fundScore": 0,
             "nextEarnings": None, "nextEventLabel": None,
