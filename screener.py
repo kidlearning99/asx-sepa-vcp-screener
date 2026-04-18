@@ -29,8 +29,9 @@ def get_all_asx_tickers():
     """Dynamically fetch all ASX-listed tickers from the ASX website."""
     try:
         import io
+        import pandas as pd
         url = "https://www.asx.com.au/asx/research/ASXListedCompanies.csv"
-        resp = session.get(url, timeout=30)
+        resp = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
         df = pd.read_csv(io.StringIO(resp.text), skiprows=1)
         col = [c for c in df.columns if 'code' in c.lower() or 'asx' in c.lower()][0]
         tickers = [str(row[col]).strip() + '.AX' for _, row in df.iterrows()
