@@ -1,6 +1,4 @@
-# asx-sepa-vcp-screener
-Daily ASX stock screener using Minervini SEPA + VCP+ PVR + Breakout Volume. Auto-updates every weekday ia GitHub Actions.
+# ASX SEPA+VCP Screener
 
-
----
-*Dashboard last rebuilt trigger: 2026-03-29*
+Automated daily screener for ASX stocks using SEPA and VCP criteria.
+Last triggered: 19 Apr 2026 22:37 AEST
