@@ -7,17 +7,27 @@ jobs:
   enable:
     runs-on: ubuntu-latest
     steps:
-      - name: Switch Pages to legacy branch mode
+      - name: Delete and recreate Pages with legacy mode
         run: |
-          echo "=== Switching build_type to legacy (branch deploy) ==="
-          curl -s -X PUT \
+          echo "=== Deleting Pages ==="
+          curl -s -X DELETE \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/KidLearning99/asx-sepa-vcp-screener/pages"
+
+          sleep 3
+
+          echo "=== Recreating Pages with legacy branch mode ==="
+          curl -s -X POST \
             -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/KidLearning99/asx-sepa-vcp-screener/pages" \
             -d '{"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}'
 
+          sleep 3
+
           echo ""
-          echo "=== Pages status after update ==="
+          echo "=== Final Pages status ==="
           curl -s \
             -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
