@@ -1,5 +1,5 @@
 import yfinance as yf
-import json, os, time, hashlib, requests, random
+import json, os, time, requests, random
 from datetime import date, datetime
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -333,32 +333,7 @@ def fetch_all():
     results.sort(key=lambda x: (x['sepaScore'], x['vcpScore']), reverse=True)
     return results
 
-def publish(html_path):
-    if not NETLIFY_TOKEN or not NETLIFY_SITE_ID: return
-    print("Publishing to Netlify...")
-    try:
-        with open(html_path, 'rb') as f: content = f.read()
-        sha = hashlib.sha1(content).hexdigest()
-        r = requests.post(
-            f"https://api.netlify.com/api/v1/sites/{NETLIFY_SITE_ID}/deploys",
-            headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/json"},
-            json={"files": {"/index.html": sha}}
-        )
-        try: deploy = r.json()
-        except Exception:
-            print(f"Netlify non-JSON. HTTP {r.status_code}: {r.text[:200]}")
-            return
-        did = deploy.get("id")
-        if not did: return
-        r2 = requests.put(
-            f"https://api.netlify.com/api/v1/deploys/{did}/files/index.html",
-            headers={"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/octet-stream"},
-            data=content
-        )
-        if r2.status_code == 200: print(f"Published: {deploy.get('ssl_url') or deploy.get('url')}")
-        else: print(f"Netlify Upload Failed: {r2.status_code}")
-    except Exception as err:
-        print(f"Deployment failure: {err}")
+# Deployment is handled by GitHub Pages via the workflow — no publish function needed.
 
 if __name__ == "__main__":
     print(f"SEPA+VCP ASX Screener - {date.today()}")
@@ -374,7 +349,7 @@ if __name__ == "__main__":
         html = build_dashboard.build(data)
         with open('index.html', 'w', encoding='utf-8') as f: f.write(html)
         print(f"Dashboard built: {len(html):,} chars")
-        publish('index.html')
+        print("index.html ready — GitHub Pages deployment handled by workflow.")
     except Exception as ex:
         import traceback
         tb = traceback.format_exc()
@@ -382,4 +357,3 @@ if __name__ == "__main__":
         fallback = f'<html><body><pre style="padding:20px">Build error ({date.today()}):\n{tb}</pre></body></html>'
         with open('index.html', 'w', encoding='utf-8') as f: f.write(fallback)
         print("Wrote fallback index.html for debugging")
-        publish('index.html')
