@@ -4,6 +4,8 @@ on:
   schedule:
     # 9:30 AM AEST (UTC+10) = 23:30 UTC previous night — Mon-Fri
     - cron: '30 23 * * 0-4'
+    # 12:00 PM AEST (UTC+10) = 02:00 UTC — Mon-Fri
+    - cron: '0 2 * * 1-5'
     # 3:00 PM AEST (UTC+10) = 05:00 UTC — Mon-Fri
     - cron: '0 5 * * 1-5'
   workflow_dispatch:
