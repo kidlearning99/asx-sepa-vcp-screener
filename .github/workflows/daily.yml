@@ -2,8 +2,10 @@ name: Daily ASX SEPA+VCP Screener Update
 
 on:
   schedule:
-    - cron: '30 22 * * 0-4'
-    - cron: '0 3 * * 1-5'
+    # 9:30 AM AEST (UTC+10) = 23:30 UTC previous night — Mon-Fri
+    - cron: '30 23 * * 0-4'
+    # 3:00 PM AEST (UTC+10) = 05:00 UTC — Mon-Fri
+    - cron: '0 5 * * 1-5'
   workflow_dispatch:
 
 jobs:
@@ -11,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,56 +27,36 @@ jobs:
         run: pip install yfinance pandas requests
 
       - name: Run screener and build dashboard
-        env:
-          NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: python screener.py
 
-      - name: Deploy to Netlify
-        env:
-          NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+      - name: Prepare GitHub Pages output
         run: |
-          echo "--- Netlify Deploy Diagnostics ---"
-          echo "Site ID set: $([ -n "$NETLIFY_SITE_ID" ] && echo YES || echo NO)"
-          echo "Token set:   $([ -n "$NETLIFY_TOKEN" ] && echo YES || echo NO)"
-          FILE_SHA=$(sha1sum index.html | awk '{print $1}')
-          echo "File SHA: $FILE_SHA"
+          mkdir -p _site
+          cp index.html _site/index.html
 
-          echo "--- Creating deploy ---"
-          DEPLOY_RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
-            "https://api.netlify.com/api/v1/sites/${NETLIFY_SITE_ID}/deploys" \
-            -H "Authorization: Bearer ${NETLIFY_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"files\":{\"\/index.html\":\"$FILE_SHA\"}}")
-          HTTP_STATUS=$(echo "$DEPLOY_RESP" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
-          DEPLOY_BODY=$(echo "$DEPLOY_RESP" | sed '/HTTP_STATUS:/d')
-          echo "HTTP Status: $HTTP_STATUS"
-          echo "Response: $DEPLOY_BODY"
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
 
-          if [ "$HTTP_STATUS" != "200" ]; then
-            echo "ERROR: Deploy creation failed (HTTP $HTTP_STATUS)"
-            echo "Check that NETLIFY_TOKEN and NETLIFY_SITE_ID secrets are set correctly"
-            exit 1
-          fi
-
-          DEPLOY_ID=$(echo "$DEPLOY_BODY" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
-          echo "Deploy ID: $DEPLOY_ID"
-
-          echo "--- Uploading index.html ---"
-          UPLOAD_RESP=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X PUT \
-            "https://api.netlify.com/api/v1/deploys/${DEPLOY_ID}/files/index.html" \
-            -H "Authorization: Bearer ${NETLIFY_TOKEN}" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary @index.html)
-          UPLOAD_STATUS=$(echo "$UPLOAD_RESP" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
-          echo "Upload HTTP Status: $UPLOAD_STATUS"
-          [ "$UPLOAD_STATUS" = "200" ] && echo "SUCCESS: Netlify deployed!" || echo "ERROR: Upload failed (HTTP $UPLOAD_STATUS)"
-
-      - name: Commit updated index.html
+      - name: Commit updated index.html to repo
         run: |
           git config user.name "ASX Screener Bot"
           git config user.email "bot@asx-screener.com"
-          git add index.html data/ || true
+          git add index.html
           git diff --staged --quiet || git commit -m "Auto-update: $(date '+%d %b %Y %H:%M')"
           git push || true
+
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
