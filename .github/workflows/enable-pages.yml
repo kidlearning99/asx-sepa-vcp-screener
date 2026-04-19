@@ -1,0 +1,28 @@
+name: Enable GitHub Pages
+
+on:
+  workflow_dispatch:
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable GitHub Pages
+        run: |
+          RESP=$(curl -s -w "\nSTATUS:%{http_code}" -X POST \
+            -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/KidLearning99/asx-sepa-vcp-screener/pages" \
+            -d '{"source":{"branch":"gh-pages","path":"/"}}')
+          echo "$RESP"
+
+          # If already exists (409), update it instead
+          STATUS=$(echo "$RESP" | grep "STATUS:" | cut -d: -f2)
+          if [ "$STATUS" = "409" ]; then
+            echo "Pages exists, updating source..."
+            curl -s -X PUT \
+              -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/KidLearning99/asx-sepa-vcp-screener/pages" \
+              -d '{"source":{"branch":"gh-pages","path":"/"}}'
+          fi
