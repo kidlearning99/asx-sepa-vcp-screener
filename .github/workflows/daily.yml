@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pages: write
+      id-token: write
 
     steps:
       - uses: actions/checkout@v4
@@ -27,22 +29,24 @@ jobs:
       - name: Run screener and build dashboard
         run: python screener.py
 
-      - name: Enable GitHub Pages (if not already enabled)
+      - name: Enable GitHub Pages via personal token
+        env:
+          PAT: ${{ secrets.PAT_TOKEN }}
         run: |
-          curl -s -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          # Try to enable pages (will 409 if already enabled, that's fine)
+          curl -s -o /tmp/pages_resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: token ${PAT}" \
             -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/${{ github.repository }}/pages \
-            -d '{"source":{"branch":"gh-pages","path":"/"}}' || true
+            "https://api.github.com/repos/${{ github.repository }}/pages" \
+            -d '{"source":{"branch":"gh-pages","path":"/"}}' | xargs echo "HTTP:"
+          cat /tmp/pages_resp.json
         continue-on-error: true
 
       - name: Deploy to gh-pages branch
         run: |
           git config user.name "ASX Screener Bot"
           git config user.email "bot@asx-screener.com"
-
           cp index.html /tmp/index.html
-
           git fetch origin gh-pages 2>/dev/null || true
           if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
             git checkout gh-pages
@@ -50,11 +54,9 @@ jobs:
           else
             git checkout --orphan gh-pages
           fi
-
           git rm -rf . 2>/dev/null || true
           cp /tmp/index.html index.html
           git add index.html
           git commit -m "Deploy: $(date '+%d %b %Y %H:%M AEST')" || echo "Nothing to commit"
           git push origin gh-pages
-
           git checkout main
