@@ -7,10 +7,16 @@ on:
     # 3:00 PM AEST (UTC+10) = 05:00 UTC — Mon-Fri
     - cron: '0 5 * * 1-5'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.github/**'
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    # Skip if this is an automated bot commit
+    if: "!contains(github.event.head_commit.message, 'Deploy:')"
     permissions:
       contents: write
       pages: write
