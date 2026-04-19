@@ -55,6 +55,8 @@ jobs:
           git config user.name "ASX Screener Bot"
           git config user.email "bot@asx-screener.com"
           cp index.html /tmp/index.html
+          # Remove generated file so checkout isn't blocked
+          rm -f index.html
           git fetch origin gh-pages 2>/dev/null || true
           if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
             git checkout gh-pages
@@ -67,4 +69,3 @@ jobs:
           git add index.html
           git commit -m "Deploy: $(date '+%d %b %Y %H:%M AEST')" || echo "Nothing to commit"
           git push origin gh-pages
-          git checkout main
