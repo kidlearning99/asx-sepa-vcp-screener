@@ -21,33 +21,15 @@ jobs:
       contents: write
       pages: write
       id-token: write
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
       - name: Install dependencies
-        run: pip install yfinance pandas requests
-
+        run: pip install -r requirements.txt
       - name: Run screener and build dashboard
         run: python screener.py
-
-      - name: Enable GitHub Pages via personal token
-        env:
-          PAT: ${{ secrets.PAT_TOKEN }}
-        run: |
-          # Try to enable pages (will 409 if already enabled, that's fine)
-          curl -s -o /tmp/pages_resp.json -w "%{http_code}" -X POST \
-            -H "Authorization: token ${PAT}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pages" \
-            -d '{"source":{"branch":"gh-pages","path":"/"}}' | xargs echo "HTTP:"
-          cat /tmp/pages_resp.json
-        continue-on-error: true
-
       - name: Deploy to gh-pages branch
         run: |
           git config user.name "ASX Screener Bot"
