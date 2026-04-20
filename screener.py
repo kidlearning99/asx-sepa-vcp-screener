@@ -146,7 +146,26 @@ def score_stock(ticker, hist):
         elif sepa >= 4 and vcp >= VCP_MIN and pct_hi <= 15: status = "near-pivot"
         else: status = "watch"
 
-        return {
+                try:
+            qf = t.quarterly_financials
+            rev_quarters = []
+            if qf is not None and not qf.empty:
+                for key in ['Total Revenue', 'TotalRevenue', 'Revenue']:
+                    if key in qf.index:
+                        row = qf.loc[key].dropna().sort_index()
+                        for dt, val in row.items():
+                            try:
+                                ts = pd.Timestamp(dt)
+                                label = f"Q{ts.quarter}'{str(ts.year)[2:]}"
+                                rev_quarters.append([label, float(val)])
+                            except Exception:
+                                pass
+                        rev_quarters = rev_quarters[-8:]
+                        break
+        except Exception:
+            rev_quarters = []
+        
+return {
             "_ticker_raw": ticker,
             "price": round(price, 3), "change": round(chg1d, 2),
             "ma50": ma50, "ma150": ma150, "ma200": ma200,
@@ -161,7 +180,7 @@ def score_stock(ticker, hist):
             "ticker": ticker.replace('.AX', ''), "name": ticker.replace('.AX', ''),
             "sector": "", "mktcap": 0, "mktcapFmt": "",
             "shortSignal": "", "analysis": "",
-            "revGrowth": None, "revTrend": None, "revQuarters": [],
+            "revGrowth": None, "revTrend": None, "revQuarters": rev_quarters,
             "epsGrowth": None, "netMargin": None,
             "trailingEps": None, "forwardEps": None, "fundScore": 0,
             "nextEarnings": None, "nextEventLabel": None,
