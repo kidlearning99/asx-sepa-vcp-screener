@@ -147,21 +147,30 @@ def score_stock(ticker, hist):
         else: status = "watch"
 
         try:
-            qf = getattr(t, 'quarterly_income_stmt', None) or t.quarterly_financials
             rev_quarters = []
-            if qf is not None and not qf.empty:
-                for key in ['Total Revenue', 'TotalRevenue', 'Revenue', 'Operating Revenue', 'Revenues']:
-                    if key in qf.index:
-                        row = qf.loc[key].dropna().sort_index()
+            REV_KEYS = ['Total Revenue', 'TotalRevenue', 'Revenue', 'Operating Revenue', 'Revenues']
+            for _attr in ['quarterly_income_stmt', 'quarterly_financials', 'income_stmt', 'financials']:
+                _df = getattr(t, _attr, None)
+                try:
+                    if _df is None or _df.empty:
+                        continue
+                except Exception:
+                    continue
+                for key in REV_KEYS:
+                    if key in _df.index:
+                        row = _df.loc[key].dropna().sort_index()
                         for dt, val in row.items():
                             try:
                                 ts = pd.Timestamp(dt)
-                                label = f"Q{ts.quarter}'{str(ts.year)[2:]}"
+                                label = f"FY{str(ts.year)[2:]}"
                                 rev_quarters.append([label, float(val)])
                             except Exception:
                                 pass
-                        rev_quarters = rev_quarters[-8:]
-                        break
+                        if rev_quarters:
+                            rev_quarters = rev_quarters[-8:]
+                            break
+                if rev_quarters:
+                    break
         except Exception:
             rev_quarters = []
 
