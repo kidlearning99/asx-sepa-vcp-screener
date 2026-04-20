@@ -128,16 +128,17 @@ tbody td{{padding:9px 11px;vertical-align:middle}}
 .pvg{{color:var(--green);font-weight:600}}.pvo{{color:var(--amber)}}.pvw{{color:var(--muted)}}
 .sec{{font-size:10px;color:#8b949e;max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.sig{{font-size:11px;color:#c9d1d9;line-height:1.4;max-width:200px}}.mc{{font-family:'JetBrains Mono';font-size:11px;color:#8b949e}}
 /* detail panel */
-.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 240px 1fr 1fr;gap:18px;border-top:1px solid var(--b2)}}
+.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 220px minmax(180px,1fr) minmax(180px,1fr);gap:14px;border-top:1px solid var(--b2)}}
 .dh{{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px}}
 .cl{{display:flex;flex-direction:column;gap:3px}}.cr{{display:flex;align-items:flex-start;gap:5px;font-size:11px;line-height:1.5}}.cr.ok{{color:var(--green)}}.cr.no{{color:#484f58}}.ci{{width:12px;flex-shrink:0;font-size:10px;margin-top:1px}}
-.mat{{width:100%;border-collapse:collapse;font-size:11px}}.mat td{{padding:2px 0}}.mlb{{color:var(--muted);width:56px}}.mbar{{padding:2px 6px;width:110px}}.mbw{{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}}.mbi{{height:100%;border-radius:3px}}.mvl{{font-family:'JetBrains Mono';color:#8b949e;text-align:right;width:62px}}
+.mat{{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}}.mat td{{padding:3px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.mlb{{color:var(--muted);width:52px}}.mbar{{padding:2px 6px;width:90px}}.mbw{{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}}.mbi{{height:100%;border-radius:3px}}.mvl{{font-family:'JetBrains Mono';color:#8b949e;text-align:right;width:54px}}
+.mgv{{font-family:'JetBrains Mono';font-size:11px;font-weight:700;text-align:right}}
 .abox{{background:var(--bg2);border-radius:8px;padding:13px;border-left:3px solid var(--border);font-size:12px;color:#8b949e;line-height:1.8}}.aact{{margin-top:9px;font-weight:700;font-size:12px;padding:7px 11px;border-radius:6px}}
 .abuy{{color:var(--green);background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2)}}.awch{{color:var(--blue);background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2)}}.ahld{{color:var(--amber);background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2)}}
-.pg2{{display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:10px;margin-top:9px}}.pi{{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--b2)}}.pi:last-child{{border:none}}.pk{{color:var(--muted)}}
+.pg2{{display:flex;flex-direction:column;gap:0;font-size:10px;margin-top:8px}}.pi{{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--b2)}}.pi:last-child{{border:none}}.pk{{color:var(--muted);flex-shrink:0;margin-right:6px}}.pv2{{font-family:'JetBrains Mono';font-size:10px;font-weight:600;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 /* revenue sparkbar */
-.rev-bars{{display:flex;align-items:flex-end;gap:3px;height:36px;margin:6px 0}}
-.rev-bar-wrap{{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1}}
+.rev-bars{{display:flex;align-items:flex-end;gap:3px;height:40px;margin:6px 0}}
+.rev-bar-wrap{{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0;height:100%}}
 .rev-bar{{width:100%;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}}
 .rev-bar-lbl{{font-size:8px;color:var(--muted)}}
 /* event badges */
@@ -344,10 +345,10 @@ function det(r){{
   const fpips=Array.from({{length:3}},(_,j)=>`<div class="fpip" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${{j<fs?'#d29922':'#21262d'}};border:1px solid ${{j<fs?'#d29922':'#30363d'}}"></div>`).join('&nbsp;');
 
   let epsRows='';
-  if(te!==null&&te!==undefined){{const ec=te>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Trail EPS</span><span style="color:${{ec}};font-family:monospace">$${{te}}</span></div>`;}}
-  if(fe!==null&&fe!==undefined){{const ec=fe>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Fwd EPS</span><span style="color:${{ec}};font-family:monospace">$${{fe}}</span></div>`;}}
+  if(te!==null&&te!==undefined){{const ec=te>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Trail EPS</span><span class="pv2" style="color:${{ec}}">${{te}}</span></div>`;}}
+  if(fe!==null&&fe!==undefined){{const ec=fe>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Fwd EPS</span><span class="pv2" style="color:${{ec}}">${{fe}}</span></div>`;}}
   let nmRow='';
-  if(nm!==null&&nm!==undefined){{const mc=nm>=15?'#2ea043':nm>0?'#d29922':'#f85149';nmRow=`<div class="pi"><span class="pk">Net Margin</span><span style="color:${{mc}}">${{nm}}%</span></div>`;}}
+  if(nm!==null&&nm!==undefined){{const mc=nm>=15?'#2ea043':nm>0?'#d29922':'#f85149';nmRow=`<div class="pi"><span class="pk">Net Margin</span><span class="pv2" style="color:${{mc}}">${{nm}}%</span></div>`;}}
 
   const fundCol=`
     <div>
@@ -355,8 +356,8 @@ function det(r){{
       ${{revTrendChip(r.revTrend)}}
       ${{revBars(r.revQuarters)}}
       <table class="mat">
-        <tr><td class="mlb">Rev YoY</td><td colspan="2">${{fmtGrowth(rg)}}</td></tr>
-        <tr><td class="mlb">EPS Grw</td><td colspan="2">${{fmtGrowth(eg,10,0)}}</td></tr>
+        <tr><td class="mlb">Rev YoY</td><td class="mbar"></td><td class="mgv">${{fmtGrowth(rg)}}</td></tr>
+        <tr><td class="mlb">EPS Grw</td><td class="mbar"></td><td class="mgv">${{fmtGrowth(eg,10,0)}}</td></tr>
       </table>
       <div class="pg2" style="margin-top:8px">${{nmRow}}${{epsRows}}</div>
     </div>`;
