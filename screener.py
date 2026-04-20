@@ -147,10 +147,10 @@ def score_stock(ticker, hist):
         else: status = "watch"
 
         try:
-            qf = t.quarterly_financials
+            qf = getattr(t, 'quarterly_income_stmt', None) or t.quarterly_financials
             rev_quarters = []
             if qf is not None and not qf.empty:
-                for key in ['Total Revenue', 'TotalRevenue', 'Revenue']:
+                for key in ['Total Revenue', 'TotalRevenue', 'Revenue', 'Operating Revenue', 'Revenues']:
                     if key in qf.index:
                         row = qf.loc[key].dropna().sort_index()
                         for dt, val in row.items():
