@@ -128,7 +128,7 @@ tbody td{{padding:9px 11px;vertical-align:middle}}
 .pvg{{color:var(--green);font-weight:600}}.pvo{{color:var(--amber)}}.pvw{{color:var(--muted)}}
 .sec{{font-size:10px;color:#8b949e;max-width:95px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.sig{{font-size:11px;color:#c9d1d9;line-height:1.4;max-width:200px}}.mc{{font-family:'JetBrains Mono';font-size:11px;color:#8b949e}}
 /* detail panel */
-.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 170px 1fr 1fr;gap:18px;border-top:1px solid var(--b2)}}
+.drow td{{padding:0;background:#0a0e14}}.dpanel{{padding:16px 16px 16px 44px;display:grid;grid-template-columns:210px 240px 1fr 1fr;gap:18px;border-top:1px solid var(--b2)}}
 .dh{{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:7px}}
 .cl{{display:flex;flex-direction:column;gap:3px}}.cr{{display:flex;align-items:flex-start;gap:5px;font-size:11px;line-height:1.5}}.cr.ok{{color:var(--green)}}.cr.no{{color:#484f58}}.ci{{width:12px;flex-shrink:0;font-size:10px;margin-top:1px}}
 .mat{{width:100%;border-collapse:collapse;font-size:11px}}.mat td{{padding:2px 0}}.mlb{{color:var(--muted);width:56px}}.mbar{{padding:2px 6px;width:110px}}.mbw{{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}}.mbi{{height:100%;border-radius:3px}}.mvl{{font-family:'JetBrains Mono';color:#8b949e;text-align:right;width:62px}}
