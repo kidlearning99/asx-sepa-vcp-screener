@@ -146,7 +146,7 @@ def score_stock(ticker, hist):
         elif sepa >= 4 and vcp >= VCP_MIN and pct_hi <= 15: status = "near-pivot"
         else: status = "watch"
 
-                try:
+        try:
             qf = t.quarterly_financials
             rev_quarters = []
             if qf is not None and not qf.empty:
