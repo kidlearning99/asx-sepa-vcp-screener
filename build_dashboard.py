@@ -264,7 +264,7 @@ function revBars(quarters){{
   const rows=quarters.slice(0,5).map(([lbl,val])=>{{
     const col=val>=0?'#2ea043':'#f85149';
     const arrow=val>=0?'▲':'▼';
-    const fmt=Math.abs(val)>=1000?(Math.abs(val)/1000).toFixed(1)+'B':'
+    const fmt=Math.abs(val)>=1000?(Math.abs(val)/1000).toFixed(1)+'B':'+(Math.abs(val)).toFixed(0)+'M'
 }}
 
 function render(){{
