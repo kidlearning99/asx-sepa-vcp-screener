@@ -261,10 +261,25 @@ function revTrendChip(trend){{
 
 function revBars(quarters){{
   if(!quarters||!Array.isArray(quarters)||!quarters.length)return'<div style="color:#484f58;font-size:10px">No quarterly data</div>';
-  const rows=quarters.slice(0,5).map(([lbl,val])=>{{
-    const col=val>=0?'#2ea043':'#f85149';
-    const arrow=val>=0?'▲':'▼';
-    const fmt=Math.abs(val)>=1000?(Math.abs(val)/1000).toFixed(1)+'B':'+(Math.abs(val)).toFixed(0)+'M'
+  var ds=String.fromCharCode(36);
+  var vals=quarters.slice(0,5);
+  var maxV=1;
+  for(var k=0;k<vals.length;k++){{if(Math.abs(vals[k][1])>maxV)maxV=Math.abs(vals[k][1]);}}
+  var out='';
+  for(var k=0;k<vals.length;k++){{
+    var lbl=vals[k][0],val=vals[k][1];
+    var col=val>=0?'#2ea043':'#f85149';
+    var h=Math.max(Math.round(Math.abs(val)/maxV*36),2);
+    var av=Math.abs(val);
+    var sign=val<0?'-':'';
+    var fmt=av>=1000?sign+ds+(av/1000).toFixed(1)+'B':sign+ds+av.toFixed(0)+'M';
+    out+='<div class="rev-bar-wrap">';
+    out+='<div class="rev-bar" style="height:'+h+'px;background:'+col+'"></div>';
+    out+='<div class="rev-bar-lbl">'+lbl+'</div>';
+    out+='<div style="font-size:7px;color:#8b949e">'+fmt+'</div>';
+    out+='</div>';
+  }}
+  return '<div class="rev-bars">'+out+'</div>';
 }}
 
 function render(){{
