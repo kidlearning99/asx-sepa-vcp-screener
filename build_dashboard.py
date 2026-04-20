@@ -261,17 +261,184 @@ function revTrendChip(trend){{
 
 function revBars(quarters){{
   if(!quarters||!Array.isArray(quarters)||!quarters.length)return'<div style="color:#484f58;font-size:10px">No quarterly data</div>';
-  const vals=quarters.map(q=>q[1]);
-  const mx=Math.max(...vals.map(Math.abs),1);
-  const bars=quarters.slice().reverse().map(([lbl,val])=>{{
-    const px=Math.max(Math.round(Math.abs(val)/mx*32),2);
+  const rows=quarters.slice(0,5).map(([lbl,val])=>{{
     const col=val>=0?'#2ea043':'#f85149';
-    return`<div class="rev-bar-wrap">
-      <div class="rev-bar" style="height:${{px}}px;background:${{col}}"></div>
-      <div class="rev-bar-lbl">${{lbl}}</div>
+    const arrow=val>=0?'▲':'▼';
+    const fmt=Math.abs(val)>=1000?(Math.abs(val)/1000).toFixed(1)+'B':'
+}}
+
+function render(){{
+  const srt=document.getElementById('srt').value,
+        q=document.getElementById('srch').value.toLowerCase(),
+        sec=document.getElementById('sec').value;
+  let d=D.filter(r=>{{
+    if(filt!=='all'&&r.status!==filt)return false;
+    if(sec&&r.sector!==sec)return false;
+    if(q&&!r.ticker.toLowerCase().includes(q)&&!r.name.toLowerCase().includes(q))return false;
+    return true;
+  }});
+  d.sort((a,b)=>{{
+    if(srt==='sepa') return(b.sepaScore*10+b.vcpScore)-(a.sepaScore*10+a.vcpScore);
+    if(srt==='vcp')  return b.vcpScore-a.vcpScore;
+    if(srt==='vol')  return b.volRatio-a.volRatio;
+    if(srt==='pvr')  return b.pvr-a.pvr;
+    if(srt==='fund') return (b.fundScore||0)-(a.fundScore||0);
+    if(srt==='p250') return b.chg250d-a.chg250d;
+    if(srt==='mc')   return b.mktcap-a.mktcap;
+    return 0;
+  }});
+  document.getElementById('cnt').textContent=d.length+' shown';
+  if(!d.length){{document.getElementById('tbody').innerHTML='<tr><td colspan="15"><div class="empty">No stocks match</div></td></tr>';return;}}
+  document.getElementById('tbody').innerHTML=d.map((r,i)=>row(r,i)).join('');
+}}
+
+function row(r,i){{
+  const sc=r.sepaScore,pc=sc>=6?'pg':sc>=4?'pa':'pr';
+  const ps=Array.from({{length:7}},(_,j)=>`<div class="pip ${{j<sc?pc:'po'}}"></div>`).join('');
+  const vs=Array.from({{length:4}},(_,j)=>`<div class="vp ${{j<r.vcpScore?'von':'voff'}}"></div>`).join('');
+  const fs=r.fundScore||0;
+  const fps=Array.from({{length:3}},(_,j)=>`<div class="fpip ${{j<fs?'fon':'foff'}}"></div>`).join('');
+  const bdg=r.status==='breakout'?'<span class="badge bb">BREAKOUT</span>':r.status==='near-pivot'?'<span class="badge bp">NEAR PIVOT</span>':'<span class="badge bw">WATCH</span>';
+  const cc=r.change>0?'gn':r.change<0?'rd':'gy';
+  const vc=r.volRatio>=2?'vhigh':r.volRatio>=1.5?'vmed':'vlow';
+  const p2=r.pvr>=1.5?'pvg':r.pvr>=1?'pvo':'pvw';
+  const q2=r.chg250d>=0?'gn':'rd';
+
+  // Net revenue cell
+  let revCell='<span style="color:#484f58;font-size:10px">N/A</span>';
+  if(r.revGrowth!==null&&r.revGrowth!==undefined){{
+    const trendIcons={{'accelerating':'↑↑','growing':'↑','flat':'→','declining':'↓'}};
+    const trendCols={{'accelerating':'#2ea043','growing':'#8bc34a','flat':'#d29922','declining':'#f85149'}};
+    const icon=trendIcons[r.revTrend]||'';
+    const col=trendCols[r.revTrend]||(r.revGrowth>=0?'#8b949e':'#f85149');
+    revCell=`<span style="color:${{col}};font-weight:700;font-size:11px">${{icon}} ${{r.revGrowth>=0?'+':''}}${{r.revGrowth}}%</span>`;
+  }}
+
+  // catalyst / event cell
+  let evCell='<span style="color:#484f58;font-size:10px">—</span>';
+  if(r.nextEventLabel){{
+    const hot=r.nextEventLabel.includes('⚡');
+    const ec=hot?'var(--gold)':'var(--blue)';
+    evCell=`<span style="color:${{ec}};font-size:10px;font-weight:700">${{r.nextEventLabel}}</span>`;
+  }}
+  return `<tr onclick="tog(${{i}})"><td style="color:#484f58;font-size:10px">${{i+1}}</td><td><div class="tkr">${{r.ticker}}</div><div class="co" title="${{r.name}}">${{r.name}}</div></td><td>${{bdg}}</td><td><div style="display:flex;align-items:center;gap:3px"><div class="pips">${{ps}}</div><span style="font-size:10px;color:var(--muted)">${{sc}}</span></div></td><td><div class="vpips">${{vs}}</div></td><td><span class="pv">$${{r.price}}</span></td><td><span class="${{cc}}">${{(r.change>0?'+':'')+r.change}}%</span></td><td><span class="${{vc}}">${{r.volRatio}}x</span></td><td><span class="${{p2}}">${{r.pvr}}</span></td><td><div class="fpips" style="display:flex;gap:2px">${{fps}}</div><span style="font-size:9px;color:var(--muted);margin-left:3px">${{fs}}/3</span></td><td style="white-space:nowrap">${{revCell}}</td><td style="white-space:nowrap">${{evCell}}</td><td><span class="${{q2}}">${{(r.chg250d>=0?'+':'')+r.chg250d}}%</span></td><td class="mc">${{r.mktcapFmt}}</td><td class="sec" title="${{r.sector}}">${{r.sector||''}}</td></tr><tr class="drow" id="d${{i}}" style="display:none"><td colspan="15">${{det(r)}}</td></tr>`;
+}}
+
+function det(r){{
+  const c=r.checks;
+  const cr=[[c.ma50,`Price ($${{r.price}}) > MA50 ($${{r.ma50}})`],[c.ma150,`MA50 > MA150 ($${{r.ma150}})`],[c.ma200,`MA150 > MA200 ($${{r.ma200}})`],[c.trend,`200-day MA trending up (12M: ${{(r.chg250d>=0?'+':'')+r.chg250d}}%)`],[c.high,`Within 25% of 52W high (${{r.pctFromHigh}}% below)`],[c.low,`25%+ above 52W low (${{r.pctAboveLow}}% above)`],[c.vol,`Volume breakout ≥1.5x (${{r.volRatio}}x) + PVR ${{r.pvr}}`]].map(([ok,l])=>`<div class="cr ${{ok?'ok':'no'}}"><span class="ci">${{ok?'✓':'✗'}}</span>${{l}}</div>`).join('');
+  const mx=Math.max(r.price,r.ma50,r.ma150,r.ma200);
+  const mb=(lb,v,col)=>`<tr><td class="mlb">${{lb}}</td><td class="mbar"><div class="mbw"><div class="mbi" style="width:${{Math.round(v/mx*100)}}%;background:${{col}}"></div></div></td><td class="mvl">$${{v}}</td></tr>`;
+  const vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) — VCP forming','Ideal (4/4) — textbook base'][r.vcpScore];
+  const ac=r.status==='breakout'?'abuy':r.status==='near-pivot'?'awch':'ahld';
+  const at=r.status==='breakout'?'→ BUY ZONE: Consider entry. Stop-loss below MA50. Risk 1-2% portfolio.':r.status==='near-pivot'?'→ WATCHLIST: Set alert at pivot high. Enter on breakout with vol >1.5x.':'→ MONITOR: Wait for VCP to tighten and volume to dry up.';
+
+  // ── Fundamentals column ────────────────────────────────────────────────
+  const rg=r.revGrowth, eg=r.epsGrowth, nm=r.netMargin, te=r.trailingEps, fe=r.forwardEps, fs=r.fundScore||0;
+  const fpips=Array.from({{length:3}},(_,j)=>`<div class="fpip" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${{j<fs?'#d29922':'#21262d'}};border:1px solid ${{j<fs?'#d29922':'#30363d'}}"></div>`).join('&nbsp;');
+
+  let epsRows='';
+  if(te!==null&&te!==undefined){{const ec=te>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Trail EPS</span><span class="pv2" style="color:${{ec}}">${{te}}</span></div>`;}}
+  if(fe!==null&&fe!==undefined){{const ec=fe>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Fwd EPS</span><span class="pv2" style="color:${{ec}}">${{fe}}</span></div>`;}}
+  let nmRow='';
+  if(nm!==null&&nm!==undefined){{const mc=nm>=15?'#2ea043':nm>0?'#d29922':'#f85149';nmRow=`<div class="pi"><span class="pk">Net Margin</span><span class="pv2" style="color:${{mc}}">${{nm}}%</span></div>`;}}
+
+  const fundCol=`
+    <div>
+      <div class="dh">Net Revenue Trend &nbsp;${{fpips}}</div>
+      ${{revTrendChip(r.revTrend)}}
+      ${{revBars(r.revQuarters)}}
+      <table class="mat">
+        <tr><td class="mlb">Rev YoY</td><td class="mbar"></td><td class="mgv">${{fmtGrowth(rg)}}</td></tr>
+        <tr><td class="mlb">EPS Grw</td><td class="mbar"></td><td class="mgv">${{fmtGrowth(eg,10,0)}}</td></tr>
+      </table>
+      <div class="pg2" style="margin-top:8px">${{nmRow}}${{epsRows}}</div>
+    </div>`;
+
+  // ── Upcoming events column ─────────────────────────────────────────────
+  let evHtml='<div class="ev-none">No upcoming events found</div>';
+  const evLines=[];
+  if(r.nextEventLabel){{
+    const hot=r.nextEventLabel.includes('⚡');
+    evLines.push(`<div class="${{hot?'ev-hot':'ev-soon'}}">${{r.nextEventLabel}}</div>`);
+    if(r.nextEarnings){{
+      evLines.push(`<div style="font-size:10px;color:#484f58;margin-top:3px">📆 ${{r.nextEarnings}}</div>`);
+    }}
+  }}
+  if(r.nextExDiv){{
+    evLines.push(`<div class="ev-div">💰 Ex-Dividend: ${{r.nextExDiv}}</div>`);
+  }}
+  if(evLines.length){{
+    evHtml=evLines.join('');
+  }}
+
+  // Buy/Stop/Target box
+  const entry=r.price;
+  const stop=r.ma50;
+  const risk=entry-stop;
+  const target=risk>0?(entry+2*risk).toFixed(2):null;
+  const buyBox=`
+    <div style="background:#0d1117;border:1.5px solid #2ea043;border-radius:6px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#e6edf3;letter-spacing:.05em;margin-bottom:8px">⚡ TRADE LEVELS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="background:#0f2a18;border:1px solid #2ea043;border-radius:4px;padding:6px 8px;text-align:center">
+          <div style="font-size:9px;color:#7d8590;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">BUY ABOVE</div>
+          <div style="font-size:15px;font-weight:700;color:#2ea043;font-family:'JetBrains Mono'">$${{entry}}</div>
+        </div>
+        <div style="background:#2a0f0f;border:1px solid #f85149;border-radius:4px;padding:6px 8px;text-align:center">
+          <div style="font-size:9px;color:#7d8590;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">STOP LOSS</div>
+          <div style="font-size:15px;font-weight:700;color:#f85149;font-family:'JetBrains Mono'">$${{stop}}</div>
+        </div>
+      </div>
+      ${{target?`<div style="background:#0f1e2a;border:1px solid #388bfd;border-radius:4px;padding:6px 8px;text-align:center;margin-top:6px">
+        <div style="font-size:9px;color:#7d8590;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">TARGET (2R)</div>
+        <div style="font-size:15px;font-weight:700;color:#388bfd;font-family:'JetBrains Mono'">$${{target}}</div>
+      </div>`:''}}`
+
+  const evCol=`
+    <div>
+      <div class="dh">Catalyst &amp; Upcoming Events</div>
+      ${{evHtml}}
+      ${{buyBox}}
+      <div class="abox" style="margin-top:8px">${{r.analysis}}<div class="aact ${{ac}}">${{at}}</div></div>
+    </div>`;
+
+  return `<div class="dpanel">
+    <div>
+      <div class="dh">SEPA Checklist — ${{r.sepaScore}}/7</div>
+      <div class="cl">${{cr}}</div>
+    </div>
+    <div>
+      <div class="dh">Moving Averages</div>
+      <table class="mat">${{mb('Price',r.price,'#e6edf3')}}${{mb('MA50',r.ma50,c.ma50?'#2ea043':'#f85149')}}${{mb('MA150',r.ma150,c.ma150?'#2ea043':'#f85149')}}${{mb('MA200',r.ma200,c.ma200?'#2ea043':'#f85149')}}</table>
+      <div style="margin-top:10px">
+        <div class="dh">VCP: ${{r.vcpScore}}/4</div>
+        <div style="font-size:10px;color:#8b949e;margin-top:2px;line-height:1.4">${{vd}}</div>
+      </div>
+      <div class="pg2">
+        <div class="pi"><span class="pk">5D</span><span class="${{r.chg5d>=0?'gn':'rd'}}">${{(r.chg5d>=0?'+':'')+r.chg5d}}%</span></div>
+        <div class="pi"><span class="pk">60D</span><span class="${{r.chg60d>=0?'gn':'rd'}}">${{(r.chg60d>=0?'+':'')+r.chg60d}}%</span></div>
+        <div class="pi"><span class="pk">12M</span><span class="${{r.chg250d>=0?'gn':'rd'}}">${{(r.chg250d>=0?'+':'')+r.chg250d}}%</span></div>
+        <div class="pi"><span class="pk">Cap</span><span style="color:#8b949e">${{r.mktcapFmt}}</span></div>
+      </div>
+    </div>
+    ${{fundCol}}
+    ${{evCol}}
+  </div>`;
+}}
+
+function tog(i){{const el=document.getElementById('d'+i);el.style.display=el.style.display==='none'?'table-row':'none';}}
+render();
+</script>
+</body>
+</html>"""
++(Math.abs(val)).toFixed(0)+'M';
+    return`<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #1c2128;font-size:10px">
+      <span style="color:#7d8590">${{lbl}}</span>
+      <span style="color:${{col}};font-family:'JetBrains Mono';font-weight:600">${{arrow}} ${{fmt}}</span>
     </div>`;
   }}).join('');
-  return`<div class="rev-bars">${{bars}}</div>`;
+  return`<div style="margin:4px 0">${{rows}}</div>`;
 }}
 
 function render(){{
