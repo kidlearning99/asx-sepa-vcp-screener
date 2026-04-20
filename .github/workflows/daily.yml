@@ -2,11 +2,10 @@ name: Daily ASX SEPA+VCP Screener Update
 
 on:
   schedule:
-- cron: '0 23 * * 0-4'   # 9:00 AM AEST (Mon–Fri)
-- cron: '30 0 * * 1-5'   # 10:30 AM AEST (Mon–Fri)
-- cron: '30 2 * * 1-5'   # 12:30 PM AEST (Mon–Fri)
-- cron: '30 4 * * 1-5'   # 2:30 PM AEST (Mon–Fri)
-
+    - cron: '0 23 * * 0-4'   # 9:00 AM AEST Mon-Fri
+    - cron: '30 0 * * 1-5'   # 10:30 AM AEST Mon-Fri
+    - cron: '30 2 * * 1-5'   # 12:30 PM AEST Mon-Fri
+    - cron: '30 4 * * 1-5'   # 2:30 PM AEST Mon-Fri
   workflow_dispatch:
   push:
     branches: [main]
@@ -14,7 +13,6 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
-    # Skip if this is an automated bot commit
     if: "!contains(github.event.head_commit.message, 'Deploy:')"
     permissions:
       contents: write
@@ -34,7 +32,6 @@ jobs:
           git config user.name "ASX Screener Bot"
           git config user.email "bot@asx-screener.com"
           cp index.html /tmp/index.html
-          # Remove generated file so checkout isn't blocked
           rm -f index.html
           git fetch origin gh-pages 2>/dev/null || true
           if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
