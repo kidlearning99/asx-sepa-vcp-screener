@@ -148,9 +148,10 @@ def score_stock(ticker, hist):
 
         try:
             rev_quarters = []
+            _tkr = yf.Ticker(ticker)
             REV_KEYS = ['Total Revenue', 'TotalRevenue', 'Revenue', 'Operating Revenue', 'Revenues']
             for _attr in ['quarterly_income_stmt', 'quarterly_financials', 'income_stmt', 'financials']:
-                _df = getattr(t, _attr, None)
+                _df = getattr(_tkr, _attr, None)
                 try:
                     if _df is None or _df.empty:
                         continue
