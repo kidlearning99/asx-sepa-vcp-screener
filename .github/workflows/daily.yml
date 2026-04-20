@@ -2,12 +2,11 @@ name: Daily ASX SEPA+VCP Screener Update
 
 on:
   schedule:
-    # 9:30 AM AEST (UTC+10) = 23:30 UTC previous night — Mon-Fri
-    - cron: '30 23 * * 0-4'
-    # 12:00 PM AEST (UTC+10) = 02:00 UTC — Mon-Fri
-    - cron: '0 2 * * 1-5'
-    # 3:00 PM AEST (UTC+10) = 05:00 UTC — Mon-Fri
-    - cron: '0 5 * * 1-5'
+  - cron: '0 23 * * 0-4'   # 9:00 AM AEST (Mon–Fri)
+- cron: '30 0 * * 1-5'   # 10:30 AM AEST (Mon–Fri)
+- cron: '30 2 * * 1-5'   # 12:30 PM AEST (Mon–Fri)
+- cron: '30 4 * * 1-5'   # 2:30 PM AEST (Mon–Fri)
+
   workflow_dispatch:
   push:
     branches: [main]
