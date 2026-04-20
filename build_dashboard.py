@@ -137,9 +137,9 @@ tbody td{{padding:9px 11px;vertical-align:middle}}
 .abuy{{color:var(--green);background:rgba(46,160,67,.08);border:1px solid rgba(46,160,67,.2)}}.awch{{color:var(--blue);background:rgba(56,139,253,.08);border:1px solid rgba(56,139,253,.2)}}.ahld{{color:var(--amber);background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.2)}}
 .pg2{{display:flex;flex-direction:column;gap:0;font-size:10px;margin-top:8px}}.pi{{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--b2)}}.pi:last-child{{border:none}}.pk{{color:var(--muted);flex-shrink:0;margin-right:6px}}.pv2{{font-family:'JetBrains Mono';font-size:10px;font-weight:600;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 /* revenue sparkbar */
-.rev-bars{{display:flex;align-items:flex-end;gap:3px;height:40px;margin:6px 0}}
-.rev-bar-wrap{{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:0;height:100%}}
-.rev-bar{{width:100%;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}}
+.rev-bars{{display:flex;align-items:flex-end;gap:3px;height:44px;margin:6px 0}}
+.rev-bar-wrap{{display:flex;flex-direction:column;align-items:center;gap:2px;flex:0 0 22px}}
+.rev-bar{{width:16px;border-radius:2px 2px 0 0;min-height:2px}}
 .rev-bar-lbl{{font-size:8px;color:var(--muted)}}
 /* event badges */
 .ev-hot{{display:inline-block;padding:4px 9px;border-radius:5px;font-size:11px;font-weight:800;background:rgba(240,224,64,.1);color:var(--gold);border:1px solid rgba(240,224,64,.35);margin-top:6px}}
@@ -264,10 +264,10 @@ function revBars(quarters){{
   const vals=quarters.map(q=>q[1]);
   const mx=Math.max(...vals.map(Math.abs),1);
   const bars=quarters.slice().reverse().map(([lbl,val])=>{{
-    const pct=Math.round(Math.abs(val)/mx*100);
+    const px=Math.max(Math.round(Math.abs(val)/mx*32),2);
     const col=val>=0?'#2ea043':'#f85149';
     return`<div class="rev-bar-wrap">
-      <div class="rev-bar" style="height:${{pct}}%;background:${{col}};width:100%"></div>
+      <div class="rev-bar" style="height:${{px}}px;background:${{col}}"></div>
       <div class="rev-bar-lbl">${{lbl}}</div>
     </div>`;
   }}).join('');
