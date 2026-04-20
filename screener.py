@@ -164,8 +164,8 @@ def score_stock(ticker, hist):
                         break
         except Exception:
             rev_quarters = []
-        
-return {
+
+        return {
             "_ticker_raw": ticker,
             "price": round(price, 3), "change": round(chg1d, 2),
             "ma50": ma50, "ma150": ma150, "ma200": ma200,
