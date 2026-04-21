@@ -701,7 +701,7 @@ function det(r){
 
   var candleSigsHTML = '<div style="margin-top:12px"><div class="dh" style="color:var(--gold)">Advanced Price Action Highlights</div>';
   if(r.candleSignals && r.candleSignals.length > 0){
-    for(var k=0; k<r.candleSignals.length; k++){
+    for(var k=0; k<r.candleSignals && r.candleSignals.length; k++){
       var sig = r.candleSignals[k];
       var ico = sig.includes(\'Pivot\') ? \'\\u26a1\' : sig.includes(\'Squat\') ? \'\\U0001F3CB\' : sig.includes(\'Inside\') ? \'\\U0001F92B\' : \'\\U0001F504\';
       var col = sig.includes(\'Accumulation\') || sig.includes(\'Absorbed\') || sig.includes(\'Pivot\') ? \'#00d084\' : sig.includes(\'Distribution\') ? \'#ff4757\' : \'#ff9f43\';
@@ -721,7 +721,7 @@ function det(r){
   if(r.accDistRatio>1.5) nuances.push(\'Extreme institutional footprint; buying pressure is out-pacing supply by 50%+.\');
   if(r.pctFromHigh<5) nuances.push(\'Stock is stalking 52W Highs; Relative Strength is elite vs the broader ASX.\');
   if(r.volRatio<0.7) nuances.push(\'Volume dry-up (VDU) detected. Supply exhaustion near pivot point.\');
-  if(r.candleSignals.some(s=>s.includes(\'Pivot\'))) nuances.push(\'Actionable Pocket Pivot occurred; signals internal strength entering the base.\');
+  if(r.candleSignals && r.candleSignals.some(s=>s.includes(\'Pivot\'))) nuances.push(\'Actionable Pocket Pivot occurred; signals internal strength entering the base.\');
   if(nuances.length===0) nuances.push(\'Stock is currently consolidating. Wait for technical triggers or volume dry-up.\');
   
   var nuanceHTML = \'<div style=\"height:100%\"><div class=\"dh\">Aggressive Strategy Sentiment</div>\'+
