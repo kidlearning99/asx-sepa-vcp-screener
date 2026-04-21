@@ -175,6 +175,69 @@ def score_stock(ticker, hist):
         except Exception:
             rev_quarters = []
 
+        # ── 60-day OHLCV for candlestick chart ──────────────────────────────────
+        try:
+            ohlcv = []
+            tail60 = hist.tail(60)
+            op_col = tail60.get('Open',  tail60['Close'])
+            hi_col = tail60.get('High',  tail60['Close'])
+            lo_col = tail60.get('Low',   tail60['Close'])
+            cl_col = tail60['Close']
+            vo_col = tail60['Volume']
+            for j in range(len(tail60)):
+                ohlcv.append([
+                    round(float(op_col.iloc[j]), 3),
+                    round(float(hi_col.iloc[j]), 3),
+                    round(float(lo_col.iloc[j]), 3),
+                    round(float(cl_col.iloc[j]), 3),
+                    int(float(vo_col.iloc[j]))
+                ])
+        except Exception:
+            ohlcv = []
+
+        # ── Minervini Stage Detection (1-4) ──────────────────────────────────────
+        try:
+            # Up-day vs down-day volume accumulation last 60 days
+            up_vol = down_vol = 0.0
+            for j in range(1, min(61, len(closes))):
+                chg_j = float(closes.iloc[-j]) - float(closes.iloc[-j - 1])
+                v_j   = float(volumes.iloc[-j])
+                if chg_j > 0: up_vol  += v_j
+                else:         down_vol += v_j
+            vol_accumulating = up_vol > down_vol
+
+            # Volatility expansion: recent 20d std vs earlier 40d std
+            ret_s = closes.pct_change().dropna()
+            v20  = float(ret_s.tail(20).std()) if len(ret_s) >= 20 else 0
+            v40  = float(ret_s.tail(60).head(40).std()) if len(ret_s) >= 60 else v20
+            vol_expanding = (v20 > v40 * 1.2) if v40 > 0 else False
+
+            # Lower-highs + lower-lows pattern (Stage 4 signal)
+            if len(closes) >= 60:
+                rh = float(closes.tail(20).max())
+                eh = float(closes.tail(60).head(40).max())
+                rl = float(closes.tail(20).min())
+                el2 = float(closes.tail(60).head(40).min())
+                stage4_pattern = rh < eh * 0.97 and rl < el2 * 0.97
+            else:
+                stage4_pattern = False
+
+            pa200     = price > ma200
+            ma15_a200 = ma150 > ma200
+            ma200_up  = ma200 > ma200p
+
+            # Priority: Stage 2 -> Stage 4 -> Stage 3 -> Stage 1
+            if pa200 and ma15_a200 and ma200_up and vol_accumulating:
+                stage = 2   # Advancing — only buy stage
+            elif not ma200_up and not pa200 and stage4_pattern:
+                stage = 4   # Declining — avoid
+            elif vol_expanding or (pa200 and not ma200_up) or (not pa200 and not stage4_pattern and not ma15_a200):
+                stage = 3   # Topping / distribution
+            else:
+                stage = 1   # Neglect / consolidation
+        except Exception:
+            stage = 1
+
         return {
             "_ticker_raw": ticker,
             "price": round(price, 3), "change": round(chg1d, 2),
@@ -184,6 +247,8 @@ def score_stock(ticker, hist):
             "hi52": round(hi52, 2), "lo52": round(lo52, 2),
             "chg5d": chg5d, "chg60d": chg60d, "chg250d": chg250d,
             "status": status,
+            "stage": stage,
+            "ohlcv": ohlcv,
             "checks": {"ma50": c_ma50, "ma150": c_ma150, "ma200": c_ma200,
                        "trend": c_trend, "high": c_high, "low": c_low, "vol": c_vol},
             # filled in later by enrich_stock
