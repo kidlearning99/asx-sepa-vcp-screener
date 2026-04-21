@@ -713,7 +713,7 @@ function det(r){{
     '<strong style="color:var(--text)">60-Day Acc/Dist Ratio: <span style="color:'+adrCol+'">'+adr+'x</span></strong><br/>'+
     '<span style="color:#5a7a9a;display:inline-block;margin-top:2px">'+adrTxt+'</span><br/>'+
     '<div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(30,45,69,.5)"><span style="color:#5a7a9a">Price/Vol Ratio (PVR):</span><strong style="color:'+(r.pvr>1.2?'#00d084':r.pvr>0.8?'#ff9f43':'#ff4757')+'">'+r.pvr+'</strong></div>'+
-    '<div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:#5a7a9a">Today\'s Vol vs 50d Avg:</span><strong style="color:'+(r.volRatio>=1.5?'#00d084':r.volRatio>=1?'#ff9f43':'#ff4757')+'">'+r.volRatio+'x</strong></div>'+
+    '<div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:#5a7a9a">Today Vol vs 50d Avg:</span><strong style="color:'+(r.volRatio>=1.5?'#00d084':r.volRatio>=1?'#ff9f43':'#ff4757')+'">'+r.volRatio+'x</strong></div>'+
     '</div></div>';
 
   var sepaCol='<div>'+
