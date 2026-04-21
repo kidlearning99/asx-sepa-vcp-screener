@@ -453,7 +453,7 @@ def fetch_all():
         print(f"  Price data: {pct}/{len(ASX_TICKERS)} tickers fetched, {len(hist_map)} with data")
         time.sleep(0.5)   # small pause between batches
 
-    print(f"Price history: {len(hist_map)} tickers with ≥60 days data")
+    print(f"Price history: {len(hist_map)} tickers with >=60 days data")
 
     # Step 2: score all stocks from price data (CPU only, no network)
     candidates = []
