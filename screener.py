@@ -8,7 +8,7 @@ from requests.adapters import HTTPAdapter
 
 NETLIFY_TOKEN   = os.environ.get("NETLIFY_TOKEN", "")
 NETLIFY_SITE_ID = os.environ.get("NETLIFY_SITE_ID", "")
-MIN_MARKET_CAP  = 100_000_000
+MIN_MARKET_CAP  = 10_000_000
 SEPA_MIN        = 3
 VOL_BREAKOUT    = 1.5
 VCP_MIN         = 2
