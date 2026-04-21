@@ -469,7 +469,8 @@ function revBars(quarters){{
     var h=Math.max(Math.round(Math.abs(val)/maxV*40),2);
     var av=Math.abs(val);
     var sign=val<0?'-':'';
-    var fmt=av>=1000?sign+CUR+(av/1000).toFixed(1)+'B':sign+CUR+av.toFixed(0)+'M';
+    var avM = av / 1000000;
+    var fmt=avM>=1000?sign+CUR+(avM/1000).toFixed(1)+'B':sign+CUR+avM.toFixed(0)+'M';
     out+='<div class="rev-bar-wrap">';
     out+='<div class="rev-bar" style="height:'+h+'px;background:'+col+'"></div>';
     out+='<div class="rev-bar-lbl">'+lbl+'</div>';
@@ -727,22 +728,9 @@ function det(r){{
     '<div class="pi"><span class="pk">12M</span><span class="'+(r.chg250d>=0?'gn':'rd')+'">'+(r.chg250d>=0?'+':'')+r.chg250d+'%</span></div>'+
     '<div class="pi"><span class="pk">Cap</span><span style="color:#4a6a8a">'+r.mktcapFmt+'</span></div>'+
     '</div></div>';
-  var candleSigsHTML='';
-  if(r.candleSignals && r.candleSignals.length > 0){{
-    candleSigsHTML = '<div style="margin-top:12px"><div class="dh">Recent Candlestick Patterns</div>';
-    for(var k=0; k<r.candleSignals.length; k++){{
-      var sig = r.candleSignals[k];
-      var ico = sig.includes('Pivot') ? '\u26a1' : sig.includes('Squat') ? '\U0001F3CB' : sig.includes('Inside') ? '\U0001F92B' : '\U0001F504';
-      var col = sig.includes('Accumulation') || sig.includes('Absorbed') || sig.includes('Pivot') ? '#00d084' : sig.includes('Distribution') ? '#ff4757' : '#ff9f43';
-      candleSigsHTML += '<div style="display:flex;align-items:center;gap:6px;background:var(--bg2);padding:7px 10px;border-radius:6px;margin-bottom:5px;border:1px solid var(--border);border-left:3px solid '+col+'"><span style="font-size:12px">'+ico+'</span><span style="font-size:11px;font-weight:600;color:'+col+'">'+sig+'</span></div>';
-    }}
-    candleSigsHTML += '</div>';
-  }}
-
   var chartCol='<div style="display:flex;flex-direction:column;height:100%">'+
     '<div class="dh">60-Day Candlestick + Volume (orange dash = MA50, bright bars = high volume)</div>'+
     drawCandles(r.ohlcv,r.ma50,r.price)+
-    candleSigsHTML+
     '</div>';
   return '<div class="dpanel">'+chartCol+sepaCol+fundCol+vcpCol+tradeCol+'</div>';
 }}
