@@ -410,13 +410,6 @@ const D={json_data};
 let filt='all', stageFilt=0;
 const CUR=String.fromCharCode(36);
 const SCOL={1:'#5a7a9a',2:'#00d084',3:'#ff9f43',4:'#ff4757'};
-const SLBL={1:'S1 Neglect',2:'S2 Advancing',3:'S3 Topping',4:'S4 Declining'};
-const SDESC={
-  1:'Consolidation phase. Price sideways around a flat MA200. Institutions ignoring. Avoid buying \u2014 wait for Stage 2 breakout.',
-  2:'Advancing phase. Price firmly above a rising MA200, MA150>MA200, volume accumulating on up-days. This is the ONLY safe buying stage.',
-  3:'Topping / distribution phase. Momentum slowing, smart money distributing to late buyers, volatility increasing. Reduce or exit positions.',
-  4:'Declining phase. Full downtrend with lower highs and lower lows, price below a falling MA200. Absolutely avoid buying. Wait for Stage 1 base.'
-};
 
 function setF(f,el){
   filt=f;
