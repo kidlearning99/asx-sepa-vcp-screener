@@ -238,6 +238,52 @@ def score_stock(ticker, hist):
         except Exception:
             stage = 1
 
+        # ── Candlestick Formations (SEPA/VCP suitable) ───────────────────
+        try:
+            candle_signals = []
+            if len(closes) >= 15:
+                c_op = float(hist.get('Open', closes).iloc[-1])
+                c_hi = float(hist.get('High', closes).iloc[-1])
+                c_lo = float(hist.get('Low', closes).iloc[-1])
+                c_cl = float(closes.iloc[-1])
+                c_vo = float(volumes.iloc[-1])
+                
+                p_op = float(hist.get('Open', closes).iloc[-2])
+                p_hi = float(hist.get('High', closes).iloc[-2])
+                p_lo = float(hist.get('Low', closes).iloc[-2])
+                p_cl = float(closes.iloc[-2])
+                p_vo = float(volumes.iloc[-2])
+                
+                avg_vol_10 = float(volumes.tail(10).mean())
+                
+                # 1. Pocket Pivot (Up volume > highest down volume of past 10 days)
+                if c_cl > c_op and c_cl > p_cl:
+                    max_down_vol_10 = 0
+                    for k in range(2, 12):
+                        if float(closes.iloc[-k]) < float(closes.iloc[-k-1]):
+                            dv = float(volumes.iloc[-k])
+                            if dv > max_down_vol_10: max_down_vol_10 = dv
+                    if max_down_vol_10 > 0 and c_vo > max_down_vol_10 and c_vo > avg_vol_10:
+                        candle_signals.append("Pocket Pivot (Accumulation)")
+
+                # 2. Inside Day & Dry Up
+                if c_hi < p_hi and c_lo > p_lo and c_vo < avg_vol_10 * 0.6:
+                    candle_signals.append("Inside Day & Vol Dry-up")
+
+                # 3. Squat (High vol, tight spread)
+                avg_spread = float((hist.get('High', closes) - hist.get('Low', closes)).tail(15).mean())
+                spread = c_hi - c_lo
+                if c_vo > avg_vol_10 * 1.5 and spread < avg_spread * 0.8:
+                    if c_cl >= c_op: candle_signals.append("Support Squat (Hidden Accumulation)")
+                    else:            candle_signals.append("Resistance Squat (Hidden Distribution)")
+
+                # 4. Shakeout / Reversal
+                min_lo_5 = float(hist.get('Low', closes).tail(6).head(5).min())
+                if c_lo < min_lo_5 and c_cl > c_lo + (c_hi - c_lo) * 0.6 and c_vo > avg_vol_10:
+                    candle_signals.append("Shakeout & Reversal (Supply Absorbed)")
+        except Exception:
+            candle_signals = []
+
         return {
             "_ticker_raw": ticker,
             "price": round(price, 3), "change": round(chg1d, 2),
@@ -249,6 +295,7 @@ def score_stock(ticker, hist):
             "status": status,
             "stage": stage,
             "ohlcv": ohlcv,
+            "candleSignals": candle_signals,
             "checks": {"ma50": c_ma50, "ma150": c_ma150, "ma200": c_ma200,
                        "trend": c_trend, "high": c_high, "low": c_low, "vol": c_vol},
             # filled in later by enrich_stock
