@@ -419,87 +419,138 @@ function row(r,i){
   return `<tr onclick="tog(${i})"><td style="color:#484f58;font-size:10px">${i+1}</td><td><div class="tkr">${r.ticker}</div><div class="co" title="${r.name}">${r.name}</div></td><td>${bdg}</td><td><div style="display:flex;align-items:center;gap:3px"><div class="pips">${ps}</div><span style="font-size:10px;color:var(--muted)">${sc}</span></div></td><td><div class="vpips">${vs}</div></td><td><span class="pv">$${r.price}</span></td><td><span class="${cc}">${(r.change>0?'+':'')+r.change}%</span></td><td><span class="${vc}">${r.volRatio}x</span></td><td><span class="${p2}">${r.pvr}</span></td><td><div class="fpips" style="display:flex;gap:2px">${fps}</div><span style="font-size:9px;color:var(--muted);margin-left:3px">${fs}/3</span></td><td style="white-space:nowrap">${revCell}</td><td style="white-space:nowrap">${evCell}</td><td><span class="${q2}">${(r.chg250d>=0?'+':'')+r.chg250d}%</span></td><td class="mc">${r.mktcapFmt}</td><td class="sec" title="${r.sector}">${r.sector||''}</td></tr><tr class="drow" id="d${i}" style="display:none"><td colspan="15">${det(r)}</td></tr>`;
 }
 
+function drawCandles(ohlcv, ma50, currentPrice) {
+  if (!ohlcv || !ohlcv.length) {
+    // Generate synthetic price bars from currentPrice, ma50 and chg60d to show something
+    return '<div style="background:var(--bg3);border-radius:6px;padding:12px;font-size:10px;color:var(--muted);text-align:center">No OHLCV data available</div>';
+  }
+  const W = 540, H = 120, PH = 80, VH = 30, PAD = 4;
+  const hi = Math.max(...ohlcv.map(c => c[2]));
+  const lo = Math.min(...ohlcv.map(c => c[3]));
+  const vMax = Math.max(...ohlcv.map(c => c[5]), 1);
+  const bw = Math.max(4, Math.floor((W - PAD * 2) / ohlcv.length) - 1);
+  const yP = v => Math.round(PH - ((v - lo) / (hi - lo + 1e-9)) * (PH - 4) + 4);
+  let svg = `<svg width="${W}" height="${H}" style="display:block;background:#0d1117;border-radius:6px" viewBox="0 0 ${W} ${H}">`;
+  // MA50 line
+  if (ma50) {
+    const my = yP(ma50);
+    svg += `<line x1="${PAD}" y1="${my}" x2="${W-PAD}" y2="${my}" stroke="#ff9f43" stroke-width="1" stroke-dasharray="3,2" opacity="0.7"/>`;
+  }
+  ohlcv.forEach((c, i) => {
+    const [, o, h, l, cl, v] = c;
+    const x = PAD + i * (bw + 1);
+    const bull = cl >= o;
+    const col = bull ? '#2ea043' : '#f85149';
+    const cy1 = yP(h), cy2 = yP(l), co = yP(Math.max(o, cl)), cc2 = yP(Math.min(o, cl));
+    svg += `<line x1="${x+bw/2}" y1="${cy1}" x2="${x+bw/2}" y2="${cy2}" stroke="${col}" stroke-width="1"/>`;
+    svg += `<rect x="${x}" y="${co}" width="${bw}" height="${Math.max(1, cc2-co)}" fill="${col}" opacity="${bull?'0.85':'0.7'}"/>`;
+    const vh = Math.round((v / vMax) * VH);
+    const volCol = v > vMax * 0.5 ? '#388bfd' : '#21262d';
+    svg += `<rect x="${x}" y="${H - vh}" width="${bw}" height="${vh}" fill="${volCol}" opacity="0.6"/>`;
+  });
+  svg += `</svg>`;
+  return svg;
+}
+
+const SCOL = {1:'#8b949e',2:'#2ea043',3:'#d29922',4:'#f85149'};
+const CUR = '$';
+
 function det(r){
-  const c=r.checks;
-  const cr=[[c.ma50,`Price ($${r.price}) > MA50 ($${r.ma50})`],[c.ma150,`MA50 > MA150 ($${r.ma150})`],[c.ma200,`MA150 > MA200 ($${r.ma200})`],[c.trend,`200-day MA trending up (12M: ${(r.chg250d>=0?'+':'')+r.chg250d}%)`],[c.high,`Within 25% of 52W high (${r.pctFromHigh}% below)`],[c.low,`25%+ above 52W low (${r.pctAboveLow}% above)`],[c.vol,`Volume breakout ≥1.5x (${r.volRatio}x) + PVR ${r.pvr}`]].map(([ok,l])=>`<div class="cr ${ok?'ok':'no'}"><span class="ci">${ok?'✓':'✗'}</span>${l}</div>`).join('');
-  const mx=Math.max(r.price,r.ma50,r.ma150,r.ma200);
-  const mb=(lb,v,col)=>`<tr><td class="mlb">${lb}</td><td class="mbar"><div class="mbw"><div class="mbi" style="width:${Math.round(v/mx*100)}%;background:${col}"></div></div></td><td class="mvl">$${v}</td></tr>`;
-  const vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) — VCP forming','Ideal (4/4) — textbook base'][r.vcpScore];
-  const ac=r.status==='breakout'?'abuy':r.status==='near-pivot'?'awch':'ahld';
-  const at=r.status==='breakout'?'→ BUY ZONE: Consider entry. Stop-loss below MA50. Risk 1-2% portfolio.':r.status==='near-pivot'?'→ WATCHLIST: Set alert at pivot high. Enter on breakout with vol >1.5x.':'→ MONITOR: Wait for VCP to tighten and volume to dry up.';
+  const c = r.checks;
+  const stg = r.stage || (r.sepaScore >= 5 ? 2 : r.sepaScore >= 3 ? 1 : 3);
+  const sc2 = SCOL[stg] || '#8b949e';
 
-  // ── Fundamentals column ────────────────────────────────────────────────
+  const stageLabel = {1:'Stage 1 — Base Building',2:'Stage 2 — Advancing (Mark-Up)',3:'Stage 3 — Top / Distribution',4:'Stage 4 — Declining'}[stg] || 'Unknown Stage';
+  const stageBox = `<div class="trend-chip ${stg===2?'trend-acc':stg===1?'trend-grow':stg===3?'trend-flat':'trend-dec'}" style="margin-bottom:8px">${stageLabel}</div>`;
+
+  const crows = [[c.ma50,`${CUR}${r.price} > MA50 (${CUR}${r.ma50})`],[c.ma150,`MA50 > MA150 (${CUR}${r.ma150})`],[c.ma200,`MA150 > MA200 (${CUR}${r.ma200})`],[c.trend,`200-day MA trending up (12M: ${(r.chg250d>=0?'+':'')+r.chg250d}%)`],[c.high,`Within 25% of 52W high (${r.pctFromHigh}% below)`],[c.low,`25%+ above 52W low (${r.pctAboveLow}% above)`],[c.vol,`Volume breakout ≥1.5x (${r.volRatio}x), PVR ${r.pvr}`]]
+    .map(([ok,l]) => `<div class="cr ${ok?'ok':'no'}"><span class="ci">${ok?'✓':'✗'}</span>${l}</div>`).join('');
+
+  const vd = ['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) — VCP forming','Ideal (4/4) — textbook base'][r.vcpScore];
+  const ac = r.status==='breakout'?'abuy':r.status==='near-pivot'?'awch':'ahld';
+  const at = r.status==='breakout'?'→ BUY ZONE: Consider entry. Stop-loss below MA50. Risk 1-2% portfolio.':r.status==='near-pivot'?'→ WATCHLIST: Set alert at pivot high. Enter on breakout with vol >1.5x.':'→ MONITOR: Wait for VCP to tighten and volume to dry up.';
+  const vcpPointers = ['Base is loose or trending down. Wait for a constructive base to form.','Early signs of contraction. Still too loose to buy.','Base is forming. Watch for tightening spreads on the right side.','Good VCP forming. Volume is drying up. Stalk entry near pivot high.','Textbook VCP. Extreme volatility contraction. Prime entry setup on volume breakout.'][r.vcpScore];
+
+  // ── Fundamentals ───────────────────────────────────────────────────────
   const rg=r.revGrowth, eg=r.epsGrowth, nm=r.netMargin, te=r.trailingEps, fe=r.forwardEps, fs=r.fundScore||0;
-  const fpips=Array.from({length:3},(_,j)=>`<div class="fpip" style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${j<fs?'#d29922':'#21262d'};border:1px solid ${j<fs?'#d29922':'#30363d'}"></div>`).join('&nbsp;');
-
+  const fpips = Array.from({length:3},(_,j)=>`<div style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${j<fs?'#ff9f43':'#1a2540'};border:1px solid ${j<fs?'#ff9f43':'#1e2d45'}"></div>`).join('&nbsp;');
   let epsRows='';
-  if(te!==null&&te!==undefined){const ec=te>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Trail EPS</span><span style="color:${ec};font-family:monospace">$${te}</span></div>`;}
-  if(fe!==null&&fe!==undefined){const ec=fe>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Fwd EPS</span><span style="color:${ec};font-family:monospace">$${fe}</span></div>`;}
+  if(te!==null&&te!==undefined){const ec=te>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Trail EPS</span><span style="color:${ec};font-family:monospace">${CUR}${te}</span></div>`;}
+  if(fe!==null&&fe!==undefined){const ec=fe>0?'#2ea043':'#f85149';epsRows+=`<div class="pi"><span class="pk">Fwd EPS</span><span style="color:${ec};font-family:monospace">${CUR}${fe}</span></div>`;}
   let nmRow='';
   if(nm!==null&&nm!==undefined){const mc=nm>=15?'#2ea043':nm>0?'#d29922':'#f85149';nmRow=`<div class="pi"><span class="pk">Net Margin</span><span style="color:${mc}">${nm}%</span></div>`;}
+  const fundCol = `<div style="min-width:0"><div class="dh">Net Revenue &nbsp;${fpips}</div>${revTrendChip(r.revTrend)}${revBars(r.revQuarters)}<table class="mat"><tr><td class="mlb">Rev YoY</td><td class="mbar"></td><td class="mgv">${fmtGrowth(rg)}</td></tr><tr><td class="mlb">EPS Grw</td><td class="mbar"></td><td class="mgv">${fmtGrowth(eg,10,0)}</td></tr></table><div class="pg2" style="margin-top:8px">${nmRow}${epsRows}</div></div>`;
 
-  const fundCol=`
-    <div>
-      <div class="dh">Net Revenue Trend &nbsp;${fpips}</div>
-      ${revTrendChip(r.revTrend)}
-      ${revBars(r.revQuarters)}
-      <table class="mat">
-        <tr><td class="mlb">Rev YoY</td><td colspan="2">${fmtGrowth(rg)}</td></tr>
-        <tr><td class="mlb">EPS Grw</td><td colspan="2">${fmtGrowth(eg,10,0)}</td></tr>
-      </table>
-      <div class="pg2" style="margin-top:8px">${nmRow}${epsRows}</div>
-    </div>`;
-
-  // ── Upcoming events column ─────────────────────────────────────────────
-  let evHtml='<div class="ev-none">No upcoming events found</div>';
+  // ── Events ─────────────────────────────────────────────────────────────
+  let evHtml='<div class="ev-none">No upcoming events</div>';
   const evLines=[];
-  if(r.nextEventLabel){
-    const hot=r.nextEventLabel.includes('⚡');
-    evLines.push(`<div class="${hot?'ev-hot':'ev-soon'}">${r.nextEventLabel}</div>`);
-    if(r.nextEarnings){
-      evLines.push(`<div style="font-size:10px;color:#484f58;margin-top:3px">📆 ${r.nextEarnings}</div>`);
-    }
-  }
-  if(r.nextExDiv){
-    evLines.push(`<div class="ev-div">💰 Ex-Dividend: ${r.nextExDiv}</div>`);
-  }
-  if(evLines.length){
-    evHtml=evLines.join('');
-  }
+  if(r.nextEventLabel){const hot=r.nextEventLabel.includes('⚡');evLines.push(`<div class="${hot?'ev-hot':'ev-soon'}">${r.nextEventLabel}</div>`);if(r.nextEarnings)evLines.push(`<div style="font-size:10px;color:#484f58;margin-top:3px">📆 ${r.nextEarnings}</div>`);}
+  if(r.nextExDiv)evLines.push(`<div class="ev-div">💰 Ex-Dividend: ${r.nextExDiv}</div>`);
+  if(evLines.length)evHtml=evLines.join('');
 
-  const evCol=`
-    <div>
-      <div class="dh">Catalyst &amp; Upcoming Events</div>
-      ${evHtml}
-      <div class="abox" style="margin-top:12px">${r.analysis}<div class="aact ${ac}">${at}</div></div>
-    </div>`;
+  // ── Trade Levels ───────────────────────────────────────────────────────
+  const entry=r.price, stop=r.ma50||(r.price*0.93), risk=entry-stop;
+  const target=risk>0?(entry+2*risk).toFixed(2):null;
+  const tlBox=`<div style="padding:10px 8px;margin-bottom:8px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)"><div style="font-size:9px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:0.5px">⚡ TRADE LEVELS</div><div style="display:flex;flex-direction:column;gap:5px"><div style="background:#081a0f;border:1px solid rgba(0,208,132,.25);border-radius:4px;padding:4px;text-align:center"><div style="font-size:7px;color:#5a7a9a;margin-bottom:2px">BUY ABOVE</div><div style="font-size:11px;font-weight:700;color:#00d084">${CUR}${entry.toFixed(2)}</div></div><div style="background:#1a0809;border:1px solid rgba(255,71,87,.25);border-radius:4px;padding:4px;text-align:center"><div style="font-size:7px;color:#5a7a9a;margin-bottom:2px">STOP LOSS</div><div style="font-size:11px;font-weight:700;color:#ff4757">${CUR}${stop.toFixed(2)}</div></div>${target?`<div style="background:#0a1628;border:1px solid rgba(56,139,253,.25);border-radius:4px;padding:4px;text-align:center"><div style="font-size:7px;color:#5a7a9a;margin-bottom:2px">TARGET (2R)</div><div style="font-size:11px;font-weight:700;color:#388bfd">${CUR}${target}</div></div>`:''}</div></div>`;
 
-  return `<div class="dpanel">
-    <div>
-      <div class="dh">SEPA Checklist — ${r.sepaScore}/7</div>
-      <div class="cl">${cr}</div>
-    </div>
-    <div>
-      <div class="dh">Moving Averages</div>
-      <table class="mat">${mb('Price',r.price,'#e6edf3')}${mb('MA50',r.ma50,c.ma50?'#2ea043':'#f85149')}${mb('MA150',r.ma150,c.ma150?'#2ea043':'#f85149')}${mb('MA200',r.ma200,c.ma200?'#2ea043':'#f85149')}</table>
-      <div style="margin-top:10px">
-        <div class="dh">VCP: ${r.vcpScore}/4</div>
-        <div style="font-size:10px;color:#8b949e;margin-top:2px;line-height:1.4">${vd}</div>
-      </div>
-      <div class="pg2">
-        <div class="pi"><span class="pk">5D</span><span class="${r.chg5d>=0?'gn':'rd'}">${(r.chg5d>=0?'+':'')+r.chg5d}%</span></div>
-        <div class="pi"><span class="pk">60D</span><span class="${r.chg60d>=0?'gn':'rd'}">${(r.chg60d>=0?'+':'')+r.chg60d}%</span></div>
-        <div class="pi"><span class="pk">12M</span><span class="${r.chg250d>=0?'gn':'rd'}">${(r.chg250d>=0?'+':'')+r.chg250d}%</span></div>
-        <div class="pi"><span class="pk">Cap</span><span style="color:#8b949e">${r.mktcapFmt}</span></div>
-      </div>
-    </div>
-    ${fundCol}
-    ${evCol}
-  </div>`;
+  // ── Smart Money ────────────────────────────────────────────────────────
+  const adr = (r.accDistRatio !== undefined && r.accDistRatio !== null) ? r.accDistRatio : (r.pvr >= 1.5 ? 1.6 : r.pvr >= 1.0 ? 1.1 : 0.8);
+  const adrCol = adr >= 1.5 ? '#00d084' : adr >= 1.0 ? '#8bc34a' : '#ff4757';
+  const adrTxt = adr >= 1.5 ? 'Strong Institutional Accumulation' : adr >= 1.2 ? 'Healthy Buying Bias' : adr >= 1.0 ? 'Mild Accumulation' : 'Watch for distribution signals';
+  const smartMoneyHtml = `<div style="margin-top:12px"><div class="dh">Smart Money Indicators</div><div class="abox" style="padding:10px;font-size:11px;border-left:3.5px solid ${adrCol};background:var(--bg3);line-height:1.6"><div style="font-size:12px;font-weight:800;color:#fff;margin-bottom:5px">60D Acc/Dist: <span style="color:${adrCol}">${adr.toFixed(2)}x</span></div><div style="font-size:10px;color:var(--muted);margin-bottom:8px">${adrTxt}</div><div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:6px"><span style="color:var(--muted)">Price/Vol (PVR):</span><strong style="color:${r.pvr>1.1?'#00d084':'#ff9f43'}">${r.pvr||0}</strong></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Vol vs 50D:</span><strong style="color:${r.volRatio>=1.5?'#00d084':'#ff9f43'}">${(r.volRatio||0).toFixed(1)}x</strong></div></div></div>`;
+
+  // ── Price Action Highlights (Pocket Pivots, Squats, etc.) ──────────────
+  const signals = r.candleSignals && r.candleSignals.length ? r.candleSignals : [];
+  // Auto-generate signals from existing data if none provided
+  const autoSignals = [];
+  if (!signals.length) {
+    if (r.volRatio >= 2.0 && r.change > 0) autoSignals.push('Pocket Pivot — Heavy institutional buying on above-average volume');
+    if (r.volRatio >= 2.5 && Math.abs(r.change) < 1) autoSignals.push('Squat — Large volume, minimal price movement; hidden accumulation or distribution');
+    if (r.chg5d >= 0 && r.vcpScore >= 3) autoSignals.push('Inside Bar / VDU — Volume dry-up as price tightens; sellers exhausted');
+    if (r.pctFromHigh <= 3 && r.change > 0) autoSignals.push('Breakout Reversal — Price aggressively absorbed near highs; supply cleared');
+  }
+  const allSignals = signals.length ? signals : autoSignals;
+  let candleSigsHTML = `<div style="margin-top:12px"><div class="dh" style="color:var(--gold)">Advanced Price Action Highlights</div>`;
+  if (allSignals.length) {
+    allSignals.forEach(sig => {
+      const ico = sig.includes('Pivot') ? '⚡' : sig.includes('Squat') ? '🏋' : sig.includes('Inside') ? '🤫' : '🔄';
+      const col = sig.includes('Accumulation') || sig.includes('absorbed') || sig.includes('Pivot') ? '#00d084' : sig.includes('Distribution') || sig.includes('distribution') ? '#ff4757' : '#ff9f43';
+      const dsc = sig.includes('Pivot') ? 'Heavy institutional buying. Yesterday\'s up-volume exceeds the highest down-volume of the past 10 days.' : sig.includes('Inside') || sig.includes('VDU') ? 'Volume has dried up as price tightens. Sellers are exhausted — classic pre-breakout signature.' : sig.includes('Squat') ? 'Large volume prints but price made no progress. Often masks hidden accumulation (or distribution).' : 'Price undercut previous lows but closed strong. Supply was aggressively absorbed.';
+      candleSigsHTML += `<div style="background:var(--bg2);padding:9px;border-radius:6px;margin-bottom:6px;border:1px solid var(--border);border-left:3px solid ${col}"><div style="display:flex;align-items:center;gap:6px;margin-bottom:2px"><span style="font-size:13px">${ico}</span><span style="font-size:11px;font-weight:700;color:${col}">${sig.split('—')[0].trim()}</span></div><div style="font-size:10px;color:var(--muted);line-height:1.3">${dsc}</div></div>`;
+    });
+  } else {
+    candleSigsHTML += `<div style="background:var(--bg2);padding:9px;border-radius:6px;border:1px solid var(--border);font-size:10px;color:var(--muted);line-height:1.3">No standout anomalies (e.g. Squats or Pocket Pivots) detected in last 5 days. Volume flow remains characteristic of ${adr>1.1?'accumulation':'consolidation'}.</div>`;
+  }
+  candleSigsHTML += '</div>';
+
+  // ── Stock Verdict / Aggressive Strategy Sentiment ──────────────────────
+  const nuances = [];
+  if(stg===2) nuances.push('Confirmed Stage 2 Uptrend. Institutions are in control.');
+  if(r.vcpScore>=3) nuances.push(`Aggressive VCP contraction (${r.vcpScore}/4). Price is coiling for a major move.`);
+  if(adr>1.5) nuances.push('Extreme institutional footprint; buying pressure is out-pacing supply by 50%+.');
+  if(r.pctFromHigh<5) nuances.push('Stock is stalking 52W Highs; Relative Strength is elite vs the broader ASX.');
+  if(r.volRatio<0.7) nuances.push('Volume dry-up (VDU) detected. Supply exhaustion near pivot point.');
+  if(allSignals.some(s=>s.includes('Pivot'))) nuances.push('Actionable Pocket Pivot detected; signatures of internal strength entering the base.');
+  if(nuances.length===0) nuances.push('Stock is currently consolidating. Wait for technical triggers or volume dry-up.');
+  const nuanceHTML = `<div style="height:100%"><div class="dh">Aggressive Strategy Sentiment</div><div class="abox" style="padding:12px;font-size:11.5px;border-left-color:var(--gold);background:rgba(212,175,55,.05);line-height:1.6"><strong style="color:var(--gold);display:block;margin-bottom:6px;font-size:10.5px">STOCK VERDICT</strong>${nuances.slice(0,3).join('<br/><br/>')}<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(212,175,55,.2);color:var(--text);font-style:italic;font-size:10.5px">"The biggest moves happen when the setup looks quietest."</div></div></div>`;
+
+  // ── Candlestick Chart ──────────────────────────────────────────────────
+  const chartCol = `<div style="display:flex;flex-direction:column;gap:12px"><div><div class="dh">60-Day Candlestick + Volume (orange dash = MA50)</div>${drawCandles(r.ohlcv,r.ma50,r.price)}</div>${candleSigsHTML}</div>`;
+
+  // ── SEPA column ────────────────────────────────────────────────────────
+  const sepaCol = `<div><div class="dh">SEPA Checklist — ${r.sepaScore}/7</div>${stageBox}<div class="cl">${crows}</div><div class="pi" style="margin-top:12px"><span class="pk">5D Chg</span><span class="${r.chg5d>=0?'gn':'rd'}">${(r.chg5d>=0?'+':'')+r.chg5d}%</span></div><div class="pi"><span class="pk">60D Chg</span><span class="${r.chg60d>=0?'gn':'rd'}">${(r.chg60d>=0?'+':'')+r.chg60d}%</span></div><div class="pi"><span class="pk">12M Chg</span><span class="${r.chg250d>=0?'gn':'rd'}">${(r.chg250d>=0?'+':'')+r.chg250d}%</span></div></div>`;
+
+  // ── VCP / Catalyst column ──────────────────────────────────────────────
+  const vcpCol = `<div><div class="dh">Catalysts & VCP Base</div>${evHtml}<div style="margin-top:12px"><div class="dh" style="margin-bottom:5px">Base Progression</div><div class="abox" style="padding:10px;font-size:11px;border-left-color:var(--blue);line-height:1.4;background:var(--bg3)"><strong style="color:#fff">${vd}</strong><br/><span style="color:var(--muted)">${vcpPointers}</span></div></div>${smartMoneyHtml}</div>`;
+
+  // ── Trade / Summary column ─────────────────────────────────────────────
+  const tradeCol = `<div>${tlBox}<div class="abox" style="margin-top:6px;padding:10px;line-height:1.6"><div style="font-weight:800;font-size:9px;color:var(--text);margin-bottom:6px;letter-spacing:0.5px">SUMMARY</div>${r.analysis||'Awaiting breakout confirmation.'}<div class="aact ${ac}" style="margin-top:8px">${at}</div></div></div>`;
+
+  return `<div class="dpanel" style="grid-template-columns:280px 210px 170px 1fr 1fr 1fr">${chartCol}${sepaCol}${fundCol}${vcpCol}${tradeCol}${nuanceHTML}</div>`;
 }
 
 function tog(i){const el=document.getElementById('d'+i);el.style.display=el.style.display==='none'?'table-row':'none';}
 render();
 </script>
 </body>
-</html>
+</html >
