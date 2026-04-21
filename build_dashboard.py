@@ -398,6 +398,14 @@ footer{background:#040710;border-top:1px solid var(--border);padding:18px 24px;t
 </footer>
 
 <script>
+
+var SLBL = {1: 'S1 Neglect', 2: 'S2 Advancing', 3: 'S3 Topping', 4: 'S4 Declining'};
+var SDESC = {
+  1: 'Stock is basing after a long downtrend. Wait for Stage 2.',
+  2: 'Uptrend confirmed. Institutions are buying. Target entry.',
+  3: 'Momentum slowing. Heavy volume on down days. Sell/Reduce.',
+  4: 'Downtrend in progress. Avoid or Short.'
+};
 const D={json_data};
 let filt='all', stageFilt=0;
 const CUR=String.fromCharCode(36);
@@ -637,6 +645,10 @@ function det(r){
   var stg=r.stage||1;
   var sc2=SCOL[stg];
   var crows=[[c.ma50,CUR+r.price+' > MA50 ('+CUR+(r.ma50?r.ma50.toFixed(2):'0')+')'],[c.ma150,'MA50 > MA150 ('+CUR+(r.ma150?r.ma150.toFixed(2):'0')+')'],[c.ma200,'MA150 > MA200 ('+CUR+(r.ma200?r.ma200.toFixed(2):'0')+')'],[c.trend,'200-day MA trending up (12M: '+(r.chg250d>=0?'+':'')+r.chg250d+'%)'],[c.high,'Within 25% of 52W high ('+r.pctFromHigh+'% below)'],[c.low,'25%+ above 52W low ('+r.pctAboveLow+'% above)'],[c.vol,'Volume breakout >=1.5x ('+r.volRatio+'x), PVR '+r.pvr]].map(function(p){return '<div class="cr '+(p[0]?'ok':'no')+'"><span class="ci">'+(p[0]?'\\u2713':'\\u2717')+'</span>'+p[1]+'</div>';}).join('');
+
+  var stageBox='<div class="stage-info-box" style="color:'+sc2+';background:'+sc2+'0d;border-color:'+sc2+'33">'+
+    '<strong>'+SLBL[stg]+'</strong> \u2014 '+SDESC[stg]+
+    '</div>';
   
   var vd=['No contraction','Weak (1/4)','Moderate (2/4)','Good (3/4) \\u2014 VCP forming','Ideal (4/4) \\u2014 textbook base'][r.vcpScore];
   var ac=r.status==='breakout'?'abuy':r.status==='near-pivot'?'awch':'ahld';
@@ -773,4 +785,8 @@ render();
     html = html.replace("{len(breakouts)}", str(len(breakouts)))
     html = html.replace("{len(pivots)}", str(len(pivots)))
     html = html.replace("{len(watching)}", str(len(watching)))
+    html = html.replace("{len(stage1)}", str(len(stage1)))
+    html = html.replace("{len(stage2)}", str(len(stage2)))
+    html = html.replace("{len(stage3)}", str(len(stage3)))
+    html = html.replace("{len(stage4)}", str(len(stage4)))
     return html
