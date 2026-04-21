@@ -24,6 +24,12 @@ def build(data, source="Yahoo Finance (live)"):
         if hasattr(o, '__float__'): return float(o)
         raise TypeError(repr(o))
 
+    def _clean(obj):
+        if isinstance(obj, str):  return obj.encode('utf-8', errors='replace').decode('utf-8')
+        if isinstance(obj, dict): return {k: _clean(v) for k, v in obj.items()}
+        if isinstance(obj, list): return [_clean(v) for v in obj]
+        return obj
+    data = [_clean(r) for r in data]
     json_data = json.dumps(data, default=_jsafe)
 
     n        = len(data)
@@ -656,9 +662,9 @@ function det(r){{
   if(r.nextEventLabel){{
     var hot=r.nextEventLabel.includes('\u26a1');
     evLines.push('<div class="'+(hot?'ev-hot':'ev-soon')+'">'+r.nextEventLabel+'</div>');
-    if(r.nextEarnings)evLines.push('<div style="font-size:10px;color:#253550;margin-top:3px">\uD83D\uDCC6 '+r.nextEarnings+'</div>');
+    if(r.nextEarnings)evLines.push('<div style="font-size:10px;color:#253550;margin-top:3px">📆 '+r.nextEarnings+'</div>');
   }}
-  if(r.nextExDiv)evLines.push('<div class="ev-div">\uD83D\uDCB0 Ex-Div: '+r.nextExDiv+'</div>');
+  if(r.nextExDiv)evLines.push('<div class="ev-div">💰 Ex-Div: '+r.nextExDiv+'</div>');
   if(evLines.length)evHtml=evLines.join('');
   var entry=r.price,stop=r.ma50,risk=entry-stop;
   var target=risk>0?(entry+2*risk).toFixed(2):null;
