@@ -260,7 +260,7 @@ tbody td{{padding:8px 10px;vertical-align:middle}}
 .dpanel{{
   padding:18px 18px 20px 48px;
   display:grid;
-  grid-template-columns:minmax(310px,2.2fr) minmax(160px,1fr) minmax(190px,1fr) minmax(200px,1fr);
+  grid-template-columns:minmax(310px,2.6fr) minmax(150px,1.2fr) minmax(170px,1.2fr) minmax(170px,1.3fr) minmax(140px,1fr);
   gap:16px;border-top:1px solid var(--border)
 }}
 .dh{{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:9px}}
@@ -306,8 +306,9 @@ tbody td{{padding:8px 10px;vertical-align:middle}}
 .stage-info-box{{border-radius:7px;padding:9px 11px;font-size:11px;line-height:1.6;margin-bottom:10px;border:1px solid}}
 .empty{{text-align:center;padding:50px;color:var(--muted)}}
 footer{{background:#040710;border-top:1px solid var(--border);padding:18px 24px;text-align:center;font-size:11px;color:var(--muted)}}
-@media(max-width:900px){{.dpanel{{grid-template-columns:1fr 1fr!important}}}}
-@media(max-width:600px){{.dpanel{{grid-template-columns:1fr!important}}.hero h1{{font-size:26px}}}}
+@media(max-width:1100px){{.dpanel{{grid-template-columns:1.5fr 1fr 1fr!important}}}}
+@media(max-width:800px){{.dpanel{{grid-template-columns:1fr 1fr!important}}}}
+@media(max-width:550px){{.dpanel{{grid-template-columns:1fr!important}}.hero h1{{font-size:26px}}}}
 </style>
 </head>
 <body>
@@ -668,37 +669,64 @@ function det(r){{
   if(evLines.length)evHtml=evLines.join('');
   var entry=r.price,stop=r.ma50,risk=entry-stop;
   var target=risk>0?(entry+2*risk).toFixed(2):null;
-  var tlBox='<div class="tl-box">'+
-    '<div class="tl-title">\u26A1 TRADE LEVELS</div>'+
-    '<div class="tl-grid">'+
-    '<div class="tl-cell" style="background:#081a0f;border:1px solid rgba(0,208,132,.25)"><div class="tl-lbl">BUY ABOVE</div><div class="tl-val" style="color:#00d084">'+CUR+entry+'</div></div>'+
-    '<div class="tl-cell" style="background:#1a0809;border:1px solid rgba(255,71,87,.25)"><div class="tl-lbl">STOP LOSS</div><div class="tl-val" style="color:#ff4757">'+CUR+stop+'</div></div>'+
-    '</div>'+
-    (target?'<div class="tl-cell" style="background:#08101a;border:1px solid rgba(59,130,246,.25);border-radius:5px;margin-top:6px"><div class="tl-lbl">TARGET (2R)</div><div class="tl-val" style="color:#3b82f6">'+CUR+target+'</div></div>':'')+
-    '</div>';
-  var evCol='<div>'+
-    '<div class="dh">Catalyst &amp; Events</div>'+
+  var tlBox='<div class="tl-box" style="padding:10px 8px;margin-bottom:8px">'+
+    '<div class="tl-title" style="font-size:9px;margin-bottom:6px">\u26A1 TRADE LEVELS</div>'+
+    '<div style="display:flex;flex-direction:column;gap:5px">'+
+    '<div style="background:#081a0f;border:1px solid rgba(0,208,132,.25);border-radius:4px;padding:4px;text-align:center"><div style="font-size:7px;color:#5a7a9a;margin-bottom:2px">BUY ABOVE</div><div style="font-size:11px;font-weight:700;color:#00d084">'+CUR+entry+'</div></div>'+
+    '<div style="background:#1a0809;border:1px solid rgba(255,71,87,.25);border-radius:4px;padding:4px;text-align:center"><div style="font-size:7px;color:#5a7a9a;margin-bottom:2px">STOP LOSS</div><div style="font-size:11px;font-weight:700;color:#ff4757">'+CUR+stop+'</div></div>'+
+    (target?'<div style="background:#08101a;border:1px solid rgba(59,130,246,.25);border-radius:4px;padding:4px;text-align:center;margin-top:2px"><div style="font-size:7px;color:#5a7a9a;margin-bottom:2px">TARGET (2R)</div><div style="font-size:11px;font-weight:700;color:#3b82f6">'+CUR+target+'</div></div>':'')+
+    '</div></div>';
+
+  var vcpPointers = ['Base is loose or trending down. Wait for a constructive base to form.', 'Early signs of contraction. Still too loose to buy.', 'Base is forming. Watch for tightening spreads on the right side.', 'Good VCP forming. Volume is drying up. Stalk entry near pivot high.', 'Textbook VCP. Extreme volatility contraction. Prime entry setup on volume breakout.'][r.vcpScore];
+
+  var vcpAnalysisHtml = '<div style="margin-top:12px">'+
+    '<div class="dh">VCP Analysis ('+r.vcpScore+'/4)</div>'+
+    '<div class="abox" style="padding:9px;font-size:10px;border-left-color:var(--blue);line-height:1.5">'+
+    '<strong style="color:var(--text)">'+vd+'</strong><br/>'+
+    '<span style="color:#5a7a9a;display:inline-block;margin-top:4px">'+vcpPointers+'</span>'+
+    '</div></div>';
+
+  var vcpCol='<div>'+
+    '<div class="dh">Catalysts &amp; Events</div>'+
     evHtml+
-    tlBox+
-    '<div class="abox" style="margin-top:8px">'+r.analysis+'<div class="aact '+ac+'">'+at+'</div></div>'+
+    vcpAnalysisHtml+
     '</div>';
+
+  var tradeCol='<div>'+
+    tlBox+
+    '<div class="abox" style="margin-top:6px;padding:10px;line-height:1.6">'+
+    '<div style="font-weight:800;font-size:9px;color:var(--text);margin-bottom:6px;letter-spacing:0.5px">SUMMARY</div>'+r.analysis+
+    '<div class="aact '+ac+'" style="margin-top:8px">'+at+'</div></div>'+
+    '</div>';
+
   var stageBox='<div class="stage-info-box" style="color:'+sc2+';background:'+sc2+'0d;border-color:'+sc2+'33">'+
     '<strong>'+SLBL[stg]+'</strong> \u2014 '+SDESC[stg]+
     '</div>';
+
+  var adr = r.accDistRatio || 1.0;
+  var adrCol = adr >= 1.5 ? '#00d084' : adr >= 1.0 ? '#8bc34a' : '#ff4757';
+  var adrTxt = adr >= 1.5 ? 'Strong Accumulation (Inst. Buying)' : adr >= 1.0 ? 'Mild Accumulation' : 'Distribution (Selling Pressure)';
+  
+  var smartMoneyHtml = '<div style="margin-top:12px">'+
+    '<div class="dh">Smart Money Indicators</div>'+
+    '<div class="abox" style="padding:9px;font-size:10px;border-left-color:'+adrCol+';line-height:1.5">'+
+    '<strong style="color:var(--text)">60-Day Acc/Dist Ratio: <span style="color:'+adrCol+'">'+adr+'x</span></strong><br/>'+
+    '<span style="color:#5a7a9a;display:inline-block;margin-top:2px">'+adrTxt+'</span><br/>'+
+    '<div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px solid rgba(30,45,69,.5)"><span style="color:#5a7a9a">Price/Vol Ratio (PVR):</span><strong style="color:'+(r.pvr>1.2?'#00d084':r.pvr>0.8?'#ff9f43':'#ff4757')+'">'+r.pvr+'</strong></div>'+
+    '<div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:#5a7a9a">Today\'s Vol vs 50d Avg:</span><strong style="color:'+(r.volRatio>=1.5?'#00d084':r.volRatio>=1?'#ff9f43':'#ff4757')+'">'+r.volRatio+'x</strong></div>'+
+    '</div></div>';
+
   var sepaCol='<div>'+
     '<div class="dh">SEPA Checklist \u2014 '+r.sepaScore+'/7</div>'+
     stageBox+
     '<div class="cl">'+crows+'</div>'+
-    '<div style="margin-top:10px"><div class="dh">Moving Averages</div>'+
-    '<table class="mat">'+mb('Price',r.price,'#e8f0fe')+mb('MA50',r.ma50,c.ma50?'#00d084':'#ff4757')+mb('MA150',r.ma150,c.ma150?'#00d084':'#ff4757')+mb('MA200',r.ma200,c.ma200?'#00d084':'#ff4757')+'</table>'+
-    '<div style="margin-top:10px"><div class="dh">VCP: '+r.vcpScore+'/4</div>'+
-    '<div style="font-size:10px;color:#4a6a8a;margin-top:2px;line-height:1.4">'+vd+'</div></div>'+
-    '<div class="pg2">'+
+    smartMoneyHtml+
+    '<div class="pg2" style="margin-top:12px">'+
     '<div class="pi"><span class="pk">5D</span><span class="'+(r.chg5d>=0?'gn':'rd')+'">'+(r.chg5d>=0?'+':'')+r.chg5d+'%</span></div>'+
     '<div class="pi"><span class="pk">60D</span><span class="'+(r.chg60d>=0?'gn':'rd')+'">'+(r.chg60d>=0?'+':'')+r.chg60d+'%</span></div>'+
     '<div class="pi"><span class="pk">12M</span><span class="'+(r.chg250d>=0?'gn':'rd')+'">'+(r.chg250d>=0?'+':'')+r.chg250d+'%</span></div>'+
     '<div class="pi"><span class="pk">Cap</span><span style="color:#4a6a8a">'+r.mktcapFmt+'</span></div>'+
-    '</div></div></div>';
+    '</div></div>';
   var candleSigsHTML='';
   if(r.candleSignals && r.candleSignals.length > 0){{
     candleSigsHTML = '<div style="margin-top:12px"><div class="dh">Recent Candlestick Patterns</div>';
@@ -716,7 +744,7 @@ function det(r){{
     drawCandles(r.ohlcv,r.ma50,r.price)+
     candleSigsHTML+
     '</div>';
-  return '<div class="dpanel">'+chartCol+sepaCol+fundCol+evCol+'</div>';
+  return '<div class="dpanel">'+chartCol+sepaCol+fundCol+vcpCol+tradeCol+'</div>';
 }}
 
 function tog(i){{

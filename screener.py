@@ -205,6 +205,7 @@ def score_stock(ticker, hist):
                 if chg_j > 0: up_vol  += v_j
                 else:         down_vol += v_j
             vol_accumulating = up_vol > down_vol
+            acc_dist_ratio = round(up_vol / down_vol, 2) if down_vol > 0 else 99.0
 
             # Volatility expansion: recent 20d std vs earlier 40d std
             ret_s = closes.pct_change().dropna()
@@ -237,6 +238,7 @@ def score_stock(ticker, hist):
                 stage = 1   # Neglect / consolidation
         except Exception:
             stage = 1
+            acc_dist_ratio = 1.0
 
         # ── Candlestick Formations (SEPA/VCP suitable) ───────────────────
         try:
@@ -296,6 +298,7 @@ def score_stock(ticker, hist):
             "stage": stage,
             "ohlcv": ohlcv,
             "candleSignals": candle_signals,
+            "accDistRatio": acc_dist_ratio,
             "checks": {"ma50": c_ma50, "ma150": c_ma150, "ma200": c_ma200,
                        "trend": c_trend, "high": c_high, "low": c_low, "vol": c_vol},
             # filled in later by enrich_stock
